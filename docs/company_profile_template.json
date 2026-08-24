@@ -1,0 +1,44 @@
+{
+  "_instructions": "Fill one of these per target company. Verified by an admin/senior before it goes live. This is the ONLY source of factual company data - the AI never invents this.",
+  "name": "Example Corp",
+  "roles": ["SDE-1", "Analyst"],
+  "tags": ["product-based"],
+  "min_cgpa": "7.0",
+  "preferred_branches": ["CSE", "IT", "ECE"],
+  "resume_keywords": ["Data Structures", "System Design", "React", "Python"],
+  "rounds": [
+    {
+      "order_index": 1,
+      "round_type": "OA",
+      "subjects_tested": ["DSA", "Aptitude"],
+      "difficulty": "Medium",
+      "notes": "2 coding questions (45 min) + 20 aptitude MCQs (20 min). No negative marking.",
+      "questions": [
+        {
+          "subject": "DSA",
+          "difficulty": "Medium",
+          "tags": ["arrays", "two-pointer"],
+          "text": "Example: Given an array, find the subarray with maximum sum (Kadane's variant).",
+          "source": "senior_submitted",
+          "submitted_by": "Batch 2025 alum"
+        }
+      ]
+    },
+    {
+      "order_index": 2,
+      "round_type": "Technical",
+      "subjects_tested": ["DSA", "DBMS", "OS"],
+      "difficulty": "Medium",
+      "notes": "45 min. Starts with a project deep-dive, then 1-2 DSA questions on paper, then DBMS normalization/SQL query.",
+      "questions": []
+    },
+    {
+      "order_index": 3,
+      "round_type": "HR",
+      "subjects_tested": [],
+      "difficulty": "Easy",
+      "notes": "Standard fit/behavioral questions + salary discussion.",
+      "questions": []
+    }
+  ]
+}

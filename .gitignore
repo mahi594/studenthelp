@@ -1,0 +1,27 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node
+node_modules/
+.next/
+next-env.d.ts
+
+# Env files
+.env
+.env.local
+*.env
+
+# Backups & Data
+backups/
+*.sql.gz
+*.db
+local_uploads/
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+

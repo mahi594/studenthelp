@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: studenthelp
+          POSTGRES_PASSWORD: studenthelp
+          POSTGRES_DB: studenthelp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U studenthelp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      # The app's DB engine connects lazily (see app/db/database.py), and
+      # tests override get_db entirely with a session bound to
+      # TEST_DATABASE_URL - so DATABASE_URL just needs to be well-formed,
+      # it's never actually queried during the test run.
+      DATABASE_URL: postgresql://studenthelp:studenthelp@localhost:5432/studenthelp_test
+      TEST_DATABASE_URL: postgresql://studenthelp:studenthelp@localhost:5432/studenthelp_test
+      SECRET_KEY: ci-test-secret-key
+      # AI calls are mocked in every test (see tests/conftest.py) - no real
+      # API keys needed for CI.
+      GEMINI_API_KEY: ""
+      GROQ_API_KEY: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -v
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1

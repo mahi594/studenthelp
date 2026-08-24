@@ -1,0 +1,56 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: studenthelp
+      POSTGRES_PASSWORD: studenthelp
+      POSTGRES_DB: studenthelp
+    ports:
+      - "5434:5432"
+    volumes:
+      - studenthelp_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studenthelp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      # Overrides .env so the backend talks to the `db` service by hostname,
+      # not localhost, inside the Docker network.
+      DATABASE_URL: postgresql://studenthelp:studenthelp@db:5432/studenthelp
+      # The container's CMD already runs `alembic upgrade head` on every
+      # start - AUTO_CREATE_TABLES's create_all() would conflict with that
+      # (see the setting's docstring in app/core/config.py), so it's off here.
+      AUTO_CREATE_TABLES: "false"
+    ports:
+      - "8080:8000"
+    volumes:
+      # Persists resumes saved by the local-storage dev fallback (used when
+      # S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY aren't set) across
+      # `--force-recreate`. Irrelevant once real S3/R2 credentials are set.
+      - studenthelp_local_uploads:/app/local_uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./web
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8080/api/v1
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  studenthelp_pgdata:
+  studenthelp_local_uploads:
