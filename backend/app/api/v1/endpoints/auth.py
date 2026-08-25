@@ -210,6 +210,7 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
     institution_id = None
     college_name = payload.college_name.strip() if payload.college_name else None
     inst_code = payload.institution_code.strip() if payload.institution_code else None
+
     if college_name or inst_code:
         institution = get_or_create_institution(db, college_name or inst_code, code=inst_code)
         institution_id = institution.id
@@ -225,6 +226,8 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
         college_name=college_name,
         institution_id=institution_id,
     )
+
+
 
     db.add(user)
     db.commit()

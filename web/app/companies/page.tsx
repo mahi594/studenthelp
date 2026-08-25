@@ -121,28 +121,36 @@ export default function CompaniesPage() {
                 </div>
               )}
 
-              <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+              <div style={{ display: "flex", gap: 10, marginTop: 18, flexWrap: "wrap" }}>
+                <a
+                  href={`/prep-plan?company_id=${company.id}`}
+                  className="btn btn-primary"
+                  style={{ textDecoration: "none", fontSize: 13, background: "var(--primary)", color: "#fff", fontWeight: 700, padding: "8px 16px", borderRadius: 8 }}
+                >
+                  START PREPARATION →
+                </a>
                 {company.apply_url && (
                   <a
                     href={company.apply_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="btn btn-primary"
-                    style={{ textDecoration: "none", fontSize: 13 }}
+                    className="btn btn-secondary"
+                    style={{ textDecoration: "none", fontSize: 13, padding: "8px 16px", borderRadius: 8 }}
                   >
-                    Apply now →
+                    Apply link →
                   </a>
                 )}
                 {!isApplied && (
                   <button
                     onClick={() => handleMarkApplied(company.id)}
                     className="btn btn-secondary"
-                    style={{ fontSize: 13 }}
+                    style={{ fontSize: 13, padding: "8px 16px", borderRadius: 8 }}
                   >
                     Mark as applied
                   </button>
                 )}
               </div>
+
             </div>
           );
         })}

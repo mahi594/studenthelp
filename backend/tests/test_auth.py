@@ -15,11 +15,14 @@ def test_register_and_login(client):
 
 def test_register_with_institution_code(client):
     res = client.post("/api/v1/auth/register", json={
-        "name": "Code Student", "email": "codestudent@example.com", "password": "secret123",
+        "name": "Code Student", "email": "unique_code_student@example.com", "password": "secret123",
         "institution_code": "INST2026",
     })
     assert res.status_code == 200
     assert res.json()["college_name"] is not None
+
+
+
 
 
 

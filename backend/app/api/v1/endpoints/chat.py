@@ -61,17 +61,14 @@ def ask(
     db.add_all([user_msg, assistant_msg])
     db.commit()
 
-    full_history = (
-        db.query(ChatMessage)
-        .filter(ChatMessage.user_id == current_user.id)
-        .order_by(ChatMessage.created_at.asc())
-        .all()
-    )
+    # Return only the newly created response turn (user_msg + assistant_msg) rather than fetching full history
+    recent_turn = [user_msg, assistant_msg]
 
     return ChatAskResponse(
         answer=answer,
-        history=[ChatMessageOut.model_validate(m) for m in full_history],
+        history=[ChatMessageOut.model_validate(m) for m in recent_turn],
     )
+
 
 
 from fastapi import Query

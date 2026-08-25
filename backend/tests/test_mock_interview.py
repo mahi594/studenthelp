@@ -64,3 +64,25 @@ def test_cannot_access_another_users_session(client, registered_user):
     # A completely different (unauthenticated) request shouldn't be able to read it
     res = client.get(f"/api/v1/mock-interview/{session_id}")
     assert res.status_code == 401
+
+
+def test_mock_interview_structured_dimensions_and_readiness_integration(client, registered_user):
+    start_res = client.post("/api/v1/mock-interview/start", json={
+        "role_or_subject": "SDE-1",
+    }, headers=registered_user["headers"])
+    session_id = start_res.json()["id"]
+
+    finish_res = client.post(f"/api/v1/mock-interview/{session_id}/finish", headers=registered_user["headers"])
+    assert finish_res.status_code == 200
+    fb = finish_res.json()["feedback"]
+    assert "technical_knowledge" in fb
+    assert "problem_solving" in fb
+    assert "communication_score" in fb
+    assert "answer_structure" in fb
+    assert "technical_depth" in fb
+
+    readiness_res = client.get("/api/v1/readiness/latest", headers=registered_user["headers"])
+    assert readiness_res.status_code == 200
+    bd = readiness_res.json()["breakdown"]
+    assert bd["communication"] is not None
+

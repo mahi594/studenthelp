@@ -90,9 +90,17 @@ def _generate(prompt: str, max_tokens: int = 4000, system_instruction: Optional[
 
 
 def _extract_json(text: str) -> Any:
-    """Strips markdown code fences the model sometimes wraps JSON in, then parses."""
+    """Strips markdown code fences the model sometimes wraps JSON in, then parses.
+    Safely raises a clean ValueError if the JSON is malformed."""
+    if not text:
+        raise ValueError("AI provider returned empty response")
     cleaned = text.replace("```json", "").replace("```", "").strip()
-    return json.loads(cleaned)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        logger.error("Failed to parse AI JSON response: %s | Content: %s", exc, text[:200])
+        raise ValueError("Malformed AI JSON response") from exc
+
 
 
 def build_plan_prompt(
@@ -474,17 +482,21 @@ def continue_mock_interview(transcript: List[Dict[str, str]], candidate_answer: 
 
 def score_mock_interview(transcript: List[Dict[str, str]]) -> Dict[str, Any]:
     """Called when the student ends the session - reviews the full transcript
-    and returns a score + feedback, feeding into the Readiness Score."""
-    prompt = f"""Review this mock interview transcript and score the candidate's
-performance overall.
+    and returns 5 structured dimension scores + overall score + feedback."""
+    prompt = f"""Review this mock interview transcript and evaluate the candidate across 5 structured dimensions (0-100 each) plus overall score and feedback.
 
 Transcript: {json.dumps(transcript)}
 
 Return ONLY valid JSON (no markdown):
 {{
   "overall_score": 0-100,
-  "strengths": ["specific, 2-4 items"],
-  "improvements": ["specific, actionable, 2-4 items"]
+  "technical_knowledge": 0-100,
+  "problem_solving": 0-100,
+  "communication_score": 0-100,
+  "answer_structure": 0-100,
+  "technical_depth": 0-100,
+  "strengths": ["2-4 specific strengths"],
+  "improvements": ["2-4 specific actionable areas to improve"]
 }}"""
-    text = _generate(prompt, max_tokens=800)
+    text = _generate(prompt, max_tokens=1000)
     return _extract_json(text)

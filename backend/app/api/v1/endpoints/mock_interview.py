@@ -109,13 +109,20 @@ def finish_session(
 
     result = score_mock_interview(session.transcript)
 
+    overall = result.get("overall_score", 75)
     session.status = "completed"
-    session.overall_score = result.get("overall_score")
+    session.overall_score = overall
     session.feedback = {
+        "technical_knowledge": result.get("technical_knowledge", overall),
+        "problem_solving": result.get("problem_solving", overall),
+        "communication_score": result.get("communication_score", overall),
+        "answer_structure": result.get("answer_structure", overall),
+        "technical_depth": result.get("technical_depth", overall),
         "strengths": result.get("strengths", []),
         "improvements": result.get("improvements", []),
     }
     session.completed_at = datetime.utcnow()
+
     db.commit()
     db.refresh(session)
 

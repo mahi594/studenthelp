@@ -157,15 +157,53 @@ function MockInterviewPageContent() {
 
           {session.status === "completed" && (
             <div className="card" style={{ padding: 24, marginTop: 20 }}>
-              <h3 style={{ fontSize: 20 }}>Feedback</h3>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <h3 style={{ fontSize: 20, fontWeight: 700 }}>Mock Interview Evaluation Result</h3>
+                <span className="mono" style={{ fontSize: 11, background: "rgba(59,130,246,0.1)", color: "#2563eb", padding: "3px 10px", borderRadius: 12, fontWeight: 700 }}>
+                  AI Evaluation Indicators
+                </span>
+              </div>
+
               {session.overall_score !== null && (
-                <p style={{ fontSize: 32, fontWeight: 700, color: "var(--primary)", marginTop: 8 }}>
-                  {session.overall_score}/100
-                </p>
+                <div style={{ marginTop: 12 }}>
+                  <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>Overall Score</span>
+                  <p style={{ fontSize: 36, fontWeight: 800, color: "var(--primary)", marginTop: 2 }}>
+                    {session.overall_score} <span style={{ fontSize: 18, color: "var(--ink-soft)", fontWeight: 500 }}>/ 100</span>
+                  </p>
+                </div>
               )}
+
+              {session.feedback && (
+                <div style={{ marginTop: 20, background: "var(--surface)", padding: 16, borderRadius: 8, border: "1px solid var(--line)" }}>
+                  <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: "var(--ink)" }}>Structured Indicators (0-100)</h4>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+                    <div>
+                      <span style={{ fontSize: 12, color: "var(--ink-soft)" }}>Technical Knowledge</span>
+                      <p style={{ fontSize: 18, fontWeight: 700 }}>{session.feedback.technical_knowledge ?? session.overall_score ?? "N/A"}</p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 12, color: "var(--ink-soft)" }}>Problem Solving</span>
+                      <p style={{ fontSize: 18, fontWeight: 700 }}>{session.feedback.problem_solving ?? session.overall_score ?? "N/A"}</p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 12, color: "var(--ink-soft)" }}>Communication</span>
+                      <p style={{ fontSize: 18, fontWeight: 700 }}>{session.feedback.communication_score ?? session.overall_score ?? "N/A"}</p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 12, color: "var(--ink-soft)" }}>Answer Structure</span>
+                      <p style={{ fontSize: 18, fontWeight: 700 }}>{session.feedback.answer_structure ?? session.overall_score ?? "N/A"}</p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 12, color: "var(--ink-soft)" }}>Technical Depth</span>
+                      <p style={{ fontSize: 18, fontWeight: 700 }}>{session.feedback.technical_depth ?? session.overall_score ?? "N/A"}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {session.feedback?.strengths?.length ? (
-                <div style={{ marginTop: 16 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--primary)" }}>Strengths</span>
+                <div style={{ marginTop: 18 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>Key Strengths</span>
                   <ul style={{ paddingLeft: 20, marginTop: 6 }}>
                     {session.feedback.strengths.map((s, i) => (
                       <li key={i} style={{ fontSize: 14, marginTop: 4 }}>{s}</li>
@@ -173,9 +211,10 @@ function MockInterviewPageContent() {
                   </ul>
                 </div>
               ) : null}
+
               {session.feedback?.improvements?.length ? (
-                <div style={{ marginTop: 16 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--danger)" }}>To improve</span>
+                <div style={{ marginTop: 18 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#b45309" }}>Areas to Improve</span>
                   <ul style={{ paddingLeft: 20, marginTop: 6 }}>
                     {session.feedback.improvements.map((s, i) => (
                       <li key={i} style={{ fontSize: 14, marginTop: 4 }}>{s}</li>
@@ -183,15 +222,17 @@ function MockInterviewPageContent() {
                   </ul>
                 </div>
               ) : null}
+
               <button
                 onClick={() => { setSession(null); setAnswer(""); }}
                 className="btn btn-secondary"
-                style={{ marginTop: 20 }}
+                style={{ marginTop: 24 }}
               >
-                Start another
+                Start another session
               </button>
             </div>
           )}
+
         </div>
       )}
     </main>

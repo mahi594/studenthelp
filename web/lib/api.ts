@@ -377,9 +377,18 @@ export type MockInterviewSession = {
   transcript: MockInterviewTurn[];
   status: "in_progress" | "completed";
   overall_score: number | null;
-  feedback: { strengths: string[]; improvements: string[] } | null;
+  feedback: {
+    technical_knowledge?: number;
+    problem_solving?: number;
+    communication_score?: number;
+    answer_structure?: number;
+    technical_depth?: number;
+    strengths?: string[];
+    improvements?: string[];
+  } | null;
   created_at: string;
 };
+
 
 export async function startMockInterview(roleOrSubject: string, companyId?: string): Promise<MockInterviewSession> {
   const res = await api.post("/mock-interview/start", { role_or_subject: roleOrSubject, company_id: companyId || undefined });

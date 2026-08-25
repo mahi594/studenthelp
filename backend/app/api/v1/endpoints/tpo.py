@@ -451,13 +451,16 @@ def create_intervention(
 ):
     target_ids = [str(sid) for sid in payload.target_student_ids]
 
-    # IDOR / cross-tenant guard: every targeted student must actually be a
-    # student the current TPO is authorized to see (i.e. belongs to the same
-    # institution). Reject the whole request rather than silently dropping
-    # students the caller shouldn't have been able to name in the first
-    # place - that would let a TPO probe which IDs are valid students at
-    # another institution.
-    if target_ids:
+    if not target_ids:
+        # Server-side eligibility query across entire institution
+        student_query = db.query(User).filter(User.role == "student")
+        student_query = scope_to_institution(student_query, User, current_user)
+        if payload.target_branch:
+            student_query = student_query.filter(User.branch == payload.target_branch)
+        eligible_students = student_query.all()
+        target_ids = [str(s.id) for s in eligible_students]
+    else:
+        # IDOR / cross-tenant guard: every targeted student must belong to authorized institution
         student_query = db.query(User).filter(
             User.id.in_([uuid.UUID(sid) for sid in target_ids]),
             User.role == "student",
@@ -469,6 +472,7 @@ def create_intervention(
                 status_code=403,
                 detail="One or more target students are not in your institution.",
             )
+
 
     # Baseline: each target student's most recent readiness score as of
     # right now. Students with no score yet simply aren't counted - pre_avg
