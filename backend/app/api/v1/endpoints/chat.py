@@ -74,15 +74,23 @@ def ask(
     )
 
 
+from fastapi import Query
+
 @router.get("/history", response_model=list[ChatMessageOut])
 def get_history(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Lists chat history for current user with server-side pagination."""
     messages = (
         db.query(ChatMessage)
         .filter(ChatMessage.user_id == current_user.id)
         .order_by(ChatMessage.created_at.asc())
+        .offset(offset)
+        .limit(limit)
         .all()
     )
     return messages
+

@@ -57,16 +57,18 @@ def verify_company(
 def list_companies(
     name: Optional[str] = None,
     role: Optional[str] = None,
+    q: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    """List/search companies. Pass `name` to search by company name (partial
-    match) and/or `role` to filter to companies hiring for that role."""
+    """List/search companies. Pass `q` or `name` to search by company name/role."""
     query = db.query(Company)
-    if name:
-        query = query.filter(Company.name.ilike(f"%{name}%"))
+    search_term = q or name
+    if search_term:
+        query = query.filter(Company.name.ilike(f"%{search_term}%"))
     if role:
         query = query.filter(Company.roles.any(role))
     return query.all()
+
 
 
 @router.get("/{company_id}", response_model=CompanyOut)

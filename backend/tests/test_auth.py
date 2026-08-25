@@ -13,6 +13,16 @@ def test_register_and_login(client):
     assert "access_token" in login_res.json()
 
 
+def test_register_with_institution_code(client):
+    res = client.post("/api/v1/auth/register", json={
+        "name": "Code Student", "email": "codestudent@example.com", "password": "secret123",
+        "institution_code": "INST2026",
+    })
+    assert res.status_code == 200
+    assert res.json()["college_name"] is not None
+
+
+
 def test_login_wrong_password_fails(client):
     client.post("/api/v1/auth/register", json={
         "name": "Jane Doe", "email": "jane2@example.com", "password": "secret123",

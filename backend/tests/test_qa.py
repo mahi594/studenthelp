@@ -62,6 +62,12 @@ def test_upvote_answer(client, registered_user):
     assert res.status_code == 200
     assert res.json()["upvotes"] == 1
 
+    # Second upvote from same user must NOT increment upvote count
+    res_repeat = client.post(f"/api/v1/qa/answers/{answer['id']}/upvote", headers=registered_user["headers"])
+    assert res_repeat.status_code == 200
+    assert res_repeat.json()["upvotes"] == 1
+
+
 
 def test_filter_questions_by_company(client, registered_user, admin_user):
     company = client.post("/api/v1/companies/", json={"name": "QA Filter Corp"},

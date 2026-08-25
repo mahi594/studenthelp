@@ -114,23 +114,35 @@ def answer_question(
     return answer
 
 
+from app.models.qa import QAQuestion, QAAnswer, QAUpvote
+
 @router.post("/answers/{answer_id}/upvote", response_model=QAAnswerOut)
 def upvote_answer(
     answer_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Simple increment - no per-user upvote tracking/idempotency in this
-    version, so the same user can upvote more than once. Fine for a first
-    pass; add a qa_upvotes join table if abuse becomes a real problem."""
+    """Enforces 1 upvote per user per answer via QAUpvote tracking table."""
     answer = db.query(QAAnswer).filter(QAAnswer.id == answer_id).first()
     if not answer:
         raise HTTPException(status_code=404, detail="Answer not found")
 
+    existing = db.query(QAUpvote).filter(
+        QAUpvote.user_id == current_user.id,
+        QAUpvote.answer_id == answer_id
+    ).first()
+
+    if existing:
+        # Already upvoted - idempotently return current answer without double incrementing
+        return answer
+
+    upvote_record = QAUpvote(user_id=current_user.id, answer_id=answer_id)
+    db.add(upvote_record)
     answer.upvotes += 1
     db.commit()
     db.refresh(answer)
     return answer
+
 
 
 @router.delete("/questions/{question_id}")

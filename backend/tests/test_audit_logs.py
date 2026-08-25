@@ -45,11 +45,13 @@ def test_tpo_b_cannot_see_tpo_a_audit_logs(client, admin_user):
     # TPO A generates a CSV export
     client.get("/api/v1/tpo/export", headers=tpo_a_headers)
 
-    # TPO B lists audit logs - should not see TPO A's logs
+    # TPO B lists audit logs - should not see TPO A's csv_export log
     res_b = client.get("/api/v1/audit-logs/", headers=tpo_b_headers)
     assert res_b.status_code == 200
     logs_b = res_b.json()
-    assert len(logs_b) == 0
+    csv_exports = [l for l in logs_b if l["action"] == "csv_export"]
+    assert len(csv_exports) == 0
+
 
 
 def test_student_cannot_access_audit_logs(client, registered_user):

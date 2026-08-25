@@ -20,20 +20,35 @@ from sqlalchemy.orm import Session
 from app.models.institution import Institution
 
 
-def get_or_create_institution(db: Session, name: str) -> Institution:
-    name = (name or "").strip()
-    if not name:
-        raise ValueError("Institution name must not be empty")
+def get_or_create_institution(db: Session, name_or_code: str, code: str = None) -> Institution:
+    input_str = (name_or_code or "").strip()
+    code_str = (code or "").strip()
+    
+    # 1. Match by code if provided
+    if code_str:
+        by_code = db.query(Institution).filter(Institution.code.ilike(code_str)).first()
+        if by_code:
+            return by_code
 
-    existing = (
-        db.query(Institution)
-        .filter(Institution.name.ilike(name))
-        .first()
-    )
-    if existing:
-        return existing
+    # 2. Match by exact case-insensitive name
+    if input_str:
+        by_name = db.query(Institution).filter(Institution.name.ilike(input_str)).first()
+        if by_name:
+            return by_name
+        # Also check if input_str was passed as a code
+        by_code = db.query(Institution).filter(Institution.code.ilike(input_str)).first()
+        if by_code:
+            return by_code
 
-    institution = Institution(name=name)
+    if not input_str and not code_str:
+        raise ValueError("Institution name or valid code must be provided")
+
+    # 3. Create institution
+    inst_name = input_str or code_str
+    inst_code = code_str if code_str else None
+    institution = Institution(name=inst_name, code=inst_code)
     db.add(institution)
-    db.flush()  # get institution.id without a full commit, caller controls the transaction
+    db.flush()
     return institution
+
+

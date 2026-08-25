@@ -36,9 +36,15 @@ export default function CompaniesPage() {
     await markApplication(companyId, "applied");
   }
 
-  const filtered = companies.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const query = search.trim().toLowerCase();
+  const filtered = companies.filter((c) => {
+    if (!query) return true;
+    const nameMatch = c.name?.toLowerCase().includes(query);
+    const rolesMatch = c.roles?.some((r: string) => r.toLowerCase().includes(query));
+    const tagsMatch = c.tags?.some((t: string) => t.toLowerCase().includes(query));
+    const branchMatch = c.preferred_branches?.some((b: string) => b.toLowerCase().includes(query));
+    return nameMatch || rolesMatch || tagsMatch || branchMatch;
+  });
 
   return (
     <main style={{ maxWidth: 840, margin: "0 auto", padding: "40px 24px" }}>
@@ -60,8 +66,24 @@ export default function CompaniesPage() {
         {filtered.map((company) => {
           const status = applications[company.id] || "not_applied";
           const isApplied = status !== "not_applied";
-          const sourceLabel = company.source_type === "alumni_report" ? "Alumni Report" : company.source_type === "ai_recommended" ? "AI Recommended" : "Placement Cell";
-          const isVerified = company.is_curated_verified || company.source_type === "placement_cell";
+          
+          let badgeText = "UNVERIFIED";
+          let badgeBg = "rgba(107,114,128,0.1)";
+          let badgeColor = "#4b5563";
+
+          if (company.is_curated_verified) {
+            badgeText = "✓ VERIFIED BY PLACEMENT CELL";
+            badgeBg = "rgba(31,92,74,0.1)";
+            badgeColor = "var(--primary)";
+          } else if (company.source_type === "alumni_report") {
+            badgeText = "ALUMNI REPORTED";
+            badgeBg = "rgba(217,119,6,0.1)";
+            badgeColor = "#b45309";
+          } else if (company.source_type === "ai_recommended") {
+            badgeText = "AI RECOMMENDED";
+            badgeBg = "rgba(59,130,246,0.1)";
+            badgeColor = "#2563eb";
+          }
 
           return (
             <div key={company.id} className="card" style={{ padding: 24 }}>
@@ -69,15 +91,9 @@ export default function CompaniesPage() {
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <h3 style={{ fontSize: 20, fontWeight: 700 }}>{company.name}</h3>
-                    {isVerified ? (
-                      <span className="mono" style={{ fontSize: 11, background: "rgba(31,92,74,0.1)", color: "var(--primary)", padding: "2px 8px", borderRadius: 12, fontWeight: 700 }}>
-                        ✓ Verified by Placement Cell
-                      </span>
-                    ) : (
-                      <span className="mono" style={{ fontSize: 11, background: "rgba(217,119,6,0.1)", color: "#b45309", padding: "2px 8px", borderRadius: 12, fontWeight: 600 }}>
-                        ⚠ Student Reported ({sourceLabel})
-                      </span>
-                    )}
+                    <span className="mono" style={{ fontSize: 11, background: badgeBg, color: badgeColor, padding: "2px 8px", borderRadius: 12, fontWeight: 700 }}>
+                      {badgeText}
+                    </span>
                   </div>
 
                   <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
@@ -86,6 +102,7 @@ export default function CompaniesPage() {
                     ))}
                   </div>
                 </div>
+
 
                 <span className={`badge ${isApplied ? "badge-applied" : "badge-not-applied"}`}>
                   {isApplied ? "Applied" : "Not applied"}

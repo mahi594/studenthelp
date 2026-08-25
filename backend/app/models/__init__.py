@@ -10,7 +10,7 @@ from app.models.job_listing import JobListing
 from app.models.application import Application
 from app.models.mock_interview import MockInterviewSession
 from app.models.notification import Notification
-from app.models.qa import QAQuestion, QAAnswer
+from app.models.qa import QAQuestion, QAAnswer, QAUpvote
 from app.models.leetcode import LeetCodeLog
 from app.models.intervention import Intervention
 from app.models.institution import Institution
@@ -35,11 +35,13 @@ __all__ = [
     "Notification",
     "QAQuestion",
     "QAAnswer",
+    "QAUpvote",
     "LeetCodeLog",
     "Intervention",
     "Institution",
     "AuditLog",
 ]
+
 
 
 

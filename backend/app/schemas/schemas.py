@@ -18,6 +18,8 @@ class UserCreate(BaseModel):
     # every one of those queries filters on institution_id. See
     # app.services.institution_service.get_or_create_institution.
     college_name: Optional[str] = None
+    institution_code: Optional[str] = None
+
 
 
 class UserOut(BaseModel):
