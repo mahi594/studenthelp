@@ -67,7 +67,7 @@ def run_replica_safe_job(lock_id: int, job_fn):
 
 @app.on_event("startup")
 def on_startup():
-    if settings.AUTO_CREATE_TABLES:
+    if settings.AUTO_CREATE_TABLES and not is_prod:
         Base.metadata.create_all(bind=engine)
 
     def _run_leetcode_reminders_job():

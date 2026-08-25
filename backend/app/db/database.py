@@ -15,7 +15,10 @@ try:
     engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
     with engine.connect() as conn:
         pass
-except Exception:
+except Exception as exc:
+    env_str = str(getattr(settings, "ENVIRONMENT", "") or getattr(settings, "ENV", "")).lower()
+    if env_str == "production":
+        raise RuntimeError(f"Production mode requires PostgreSQL database connection. Cannot connect to {settings.DATABASE_URL}: {exc}") from exc
     # Local dev fallback to SQLite if PostgreSQL is not running or driver is missing
     engine = create_engine("sqlite:///./studenthelp_dev.db", connect_args={"check_same_thread": False})
 

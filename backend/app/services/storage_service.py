@@ -94,6 +94,9 @@ def validate_pdf_content(file_bytes: bytes, max_bytes: int = None):
 def upload_resume(file_bytes: bytes, original_filename: str, user_id, content_type: str = "application/pdf") -> dict:
     validate_pdf_content(file_bytes)
     if not _s3_configured():
+        env_str = str(getattr(settings, "ENVIRONMENT", "") or getattr(settings, "ENV", "")).lower()
+        if env_str == "production":
+            raise RuntimeError("Production mode requires Object Storage (S3/R2) configuration. Local disk fallback is prohibited in production.")
         return _upload_resume_local(file_bytes, original_filename, user_id)
 
     client = _get_s3_client()

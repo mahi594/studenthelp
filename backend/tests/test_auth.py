@@ -13,13 +13,26 @@ def test_register_and_login(client):
     assert "access_token" in login_res.json()
 
 
-def test_register_with_institution_code(client):
+def test_register_with_institution_code(client, db_session):
+    from app.models.institution import Institution
+    inst = Institution(name="Demo University", code="INST2026")
+    db_session.add(inst)
+    db_session.commit()
+
     res = client.post("/api/v1/auth/register", json={
         "name": "Code Student", "email": "unique_code_student@example.com", "password": "secret123",
         "institution_code": "INST2026",
     })
     assert res.status_code == 200
-    assert res.json()["college_name"] is not None
+    assert res.json()["college_name"] == "Demo University"
+
+def test_invalid_institution_code_rejected(client):
+    res = client.post("/api/v1/auth/register", json={
+        "name": "Bad Code Student", "email": "bad_code@example.com", "password": "secret123",
+        "institution_code": "INVALID_CODE_9999",
+    })
+    assert res.status_code == 400
+    assert "Invalid institution code" in res.json()["detail"]
 
 
 

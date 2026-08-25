@@ -25,6 +25,8 @@ from app.schemas.schemas import (
 from app.services.email_service import send_password_reset_email, send_verification_email, is_email_configured
 from app.services.institution_service import get_or_create_institution
 
+from app.models.institution import Institution
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 from passlib.handlers.bcrypt import _BcryptBackend
@@ -211,11 +213,22 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
     college_name = payload.college_name.strip() if payload.college_name else None
     inst_code = payload.institution_code.strip() if payload.institution_code else None
 
-    if college_name or inst_code:
-        institution = get_or_create_institution(db, college_name or inst_code, code=inst_code)
+    if inst_code or college_name:
+        query = db.query(Institution)
+        if inst_code and college_name:
+            institution = query.filter((Institution.code.ilike(inst_code)) | (Institution.name.ilike(college_name))).first()
+        elif inst_code:
+            institution = query.filter(Institution.code.ilike(inst_code)).first()
+        else:
+            institution = query.filter(Institution.name.ilike(college_name)).first()
+
+        if not institution:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid institution code. Please contact your Placement Cell."
+            )
         institution_id = institution.id
-        if not college_name:
-            college_name = institution.name
+        college_name = institution.name
 
     user = User(
         name=payload.name,
