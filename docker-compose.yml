@@ -10,7 +10,7 @@ services:
     ports:
       - "5434:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - studenthelp_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-studenthelp} -d ${POSTGRES_DB:-studenthelp}"]
       interval: 5s
@@ -51,5 +51,7 @@ services:
         condition: service_started
 
 volumes:
-  postgres_data:
+  studenthelp_pgdata:
+    external: true
+    name: studenthelp-complete_studenthelp_pgdata
   studenthelp_local_uploads:
