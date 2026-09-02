@@ -717,7 +717,13 @@ def export_tpo_report(
 
         score_val = latest_score.composite_score if latest_score else "Not Assessed"
         risk = compute_risk_category(latest_score.composite_score if latest_score else None)
-        flagged = "Yes" if (latest_score and latest_score.composite_score < LOW_READINESS_THRESHOLD) else "No"
+        flagged = (
+            "Yes"
+            if latest_score is not None
+            and latest_score.composite_score is not None
+            and latest_score.composite_score < LOW_READINESS_THRESHOLD
+            else "No"
+        )
         assessment_status = "Assessed" if latest_score else "Not Assessed"
 
         writer.writerow([
