@@ -6,7 +6,8 @@ from typing import Optional, List
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from sqlalchemy.orm import Session
+from sqlalchemy import func, and_, cast, Float, String
+from sqlalchemy.orm import Session, aliased
 
 from app.db.database import get_db
 from app.models.user import User, QuizResult
@@ -124,161 +125,179 @@ def get_tpo_dashboard(
     current_user: User = Depends(get_current_tpo_or_admin_user),
 ):
     page = max(1, page)
-    page_size = max(1, min(page_size, 100))  # sensible max page size
+    page_size = max(1, min(page_size, 100))
 
-    query = db.query(User).filter(User.role == "student")
+    # Base query count for total students in current institution
+    total_institution_query = db.query(User).filter(User.role == "student")
+    total_institution_query = scope_to_institution(total_institution_query, User, current_user)
+    total_institution_students = total_institution_query.count()
+
+    # Subquery for each student's latest ReadinessScore (max computed_at)
+    latest_score_subq = (
+        db.query(
+            ReadinessScore.user_id.label("user_id"),
+            func.max(ReadinessScore.computed_at).label("max_date")
+        )
+        .group_by(ReadinessScore.user_id)
+        .subquery()
+    )
+
+    score_alias = aliased(ReadinessScore)
+    query = db.query(User, score_alias).filter(User.role == "student")
     query = scope_to_institution(query, User, current_user)
+    query = query.outerjoin(latest_score_subq, User.id == latest_score_subq.c.user_id)\
+                 .outerjoin(
+                     score_alias,
+                     and_(
+                         score_alias.user_id == latest_score_subq.c.user_id,
+                         score_alias.computed_at == latest_score_subq.c.max_date
+                     )
+                 )
+
     if branch:
         query = query.filter(User.branch == branch)
     if grad_year:
         query = query.filter(User.grad_year == grad_year)
-    if target_company_id:
-        # target_company_ids is a JSON array column - filtering it in SQL is
-        # dialect-specific (Postgres JSON containment vs SQLite), so this one
-        # is applied in Python below alongside the other computed filters.
-        pass
 
-    students = query.all()
+    if cgpa_min is not None:
+        query = query.filter(cast(User.cgpa, Float) >= cgpa_min)
+    if cgpa_max is not None:
+        query = query.filter(cast(User.cgpa, Float) <= cgpa_max)
 
-    # Bulk-fetch each student's latest readiness score and interview
-    # attempt status in 2 queries total, rather than one query per student
-    # (N+1) - matters once a college has hundreds/thousands of students.
-    student_ids = [s.id for s in students]
-    latest_score_rows: dict = {}
-    if student_ids:
-        rows = (
-            db.query(ReadinessScore)
-            .filter(ReadinessScore.user_id.in_(student_ids))
-            .order_by(ReadinessScore.computed_at.desc())
-            .all()
-        )
-        for row in rows:
-            if row.user_id not in latest_score_rows:
-                latest_score_rows[row.user_id] = row
+    if readiness_min is not None:
+        query = query.filter(score_alias.composite_score >= readiness_min)
+    if readiness_max is not None:
+        query = query.filter(score_alias.composite_score <= readiness_max)
 
-    interviewed_ids = set()
-    if student_ids:
+    if risk_category:
+        if risk_category == "high":
+            query = query.filter(and_(score_alias.composite_score.isnot(None), score_alias.composite_score < LOW_READINESS_THRESHOLD))
+        elif risk_category == "moderate":
+            query = query.filter(and_(score_alias.composite_score >= LOW_READINESS_THRESHOLD, score_alias.composite_score < 70))
+        elif risk_category == "low":
+            query = query.filter(score_alias.composite_score >= 70)
+        elif risk_category == "not_assessed":
+            query = query.filter(score_alias.composite_score.is_(None))
+
+    if assessment_status == "assessed":
+        query = query.filter(score_alias.composite_score.isnot(None))
+    elif assessment_status == "not_assessed":
+        query = query.filter(score_alias.composite_score.is_(None))
+
+    if interview_status == "attempted":
         from app.models.mock_interview import MockInterviewSession
-        interviewed_ids = {
-            row.user_id
-            for row in db.query(MockInterviewSession.user_id)
-            .filter(MockInterviewSession.user_id.in_(student_ids), MockInterviewSession.status == "completed")
-            .distinct()
-            .all()
-        }
+        attempted_subq = db.query(MockInterviewSession.user_id).filter(MockInterviewSession.status == "completed").subquery()
+        query = query.filter(User.id.in_(attempted_subq))
+    elif interview_status == "not_attempted":
+        from app.models.mock_interview import MockInterviewSession
+        attempted_subq = db.query(MockInterviewSession.user_id).filter(MockInterviewSession.status == "completed").subquery()
+        query = query.filter(User.id.notin_(attempted_subq))
 
-    def matches_filters(student: User, score_row) -> bool:
-        composite = score_row.composite_score if score_row else None
-        breakdown = score_row.breakdown if score_row else {}
+    if target_company_id:
+        target_str = str(target_company_id)
+        query = query.filter(cast(User.target_company_ids, String).contains(target_str))
 
-        if cgpa_min is not None or cgpa_max is not None:
-            try:
-                cgpa_val = float(student.cgpa) if student.cgpa else None
-            except (TypeError, ValueError):
-                cgpa_val = None
-            if cgpa_val is None:
-                return False
-            if cgpa_min is not None and cgpa_val < cgpa_min:
-                return False
-            if cgpa_max is not None and cgpa_val > cgpa_max:
-                return False
+    if skill_topic:
+        skill_str = skill_topic.lower()
+        query = query.filter(cast(score_alias.breakdown, String).ilike(f"%{skill_str}%"))
 
-        if readiness_min is not None and (composite is None or composite < readiness_min):
-            return False
-        if readiness_max is not None and (composite is None or composite > readiness_max):
-            return False
+    # SQL COUNT over full filtered set
+    total_matching = query.count()
+    total_pages = max(1, (total_matching + page_size - 1) // page_size)
 
-        if risk_category and compute_risk_category(composite) != risk_category:
-            return False
+    # Calculate aggregate stats using SQL aggregations over full filtered set
+    avg_score_scalar = query.with_entities(func.avg(score_alias.composite_score)).scalar()
+    average_readiness_score = round(float(avg_score_scalar), 1) if avg_score_scalar is not None else None
 
-        if assessment_status == "assessed" and composite is None:
-            return False
-        if assessment_status == "not_assessed" and composite is not None:
-            return False
+    flagged_students_count = query.with_entities(func.count(User.id)).filter(
+        and_(score_alias.composite_score.isnot(None), score_alias.composite_score < LOW_READINESS_THRESHOLD)
+    ).scalar() or 0
 
-        if interview_status == "attempted" and student.id not in interviewed_ids:
-            return False
-        if interview_status == "not_attempted" and student.id in interviewed_ids:
-            return False
-
-        if target_company_id and target_company_id not in (student.target_company_ids or []):
-            return False
-
-        if skill_topic:
-            dim_score = breakdown.get(skill_topic) if breakdown else None
-            weaknesses = breakdown.get("top_weaknesses", []) if breakdown else []
-            # "Weak in this skill" = it's one of their identified top
-            # weaknesses, OR they scored below the risk threshold on it.
-            is_weak = (dim_score is not None and dim_score < LOW_READINESS_THRESHOLD)
-            if not is_weak and not any(skill_topic.lower() in w.lower() for w in weaknesses):
-                return False
-
-        return True
-
-    summaries = []
-    scores_for_average = []
-    branch_scores: dict = {}
-
-    for student in students:
-        score_row = latest_score_rows.get(student.id)
-        if not matches_filters(student, score_row):
-            continue
-
-        composite = score_row.composite_score if score_row else None
-        risk = compute_risk_category(composite)
-
-        summaries.append(
-            StudentReadinessSummary(
-                user_id=student.id,
-                name=student.name,
-                email=student.email,
-                branch=student.branch,
-                grad_year=student.grad_year,
-                latest_composite_score=composite,
-                flagged_low_readiness=(composite is not None and composite < LOW_READINESS_THRESHOLD),
-                risk_category=risk,
-            )
-        )
-
-        if composite is not None:
-            scores_for_average.append(composite)
-            if student.branch:
-                branch_scores.setdefault(student.branch, []).append(composite)
-
-    flagged = [s for s in summaries if s.flagged_low_readiness]
+    branch_stats_rows = query.with_entities(
+        User.branch,
+        func.avg(score_alias.composite_score),
+        func.count(User.id)
+    ).filter(score_alias.composite_score.isnot(None))\
+     .group_by(User.branch).all()
 
     branch_breakdown = [
         BranchBreakdown(
-            branch=branch_name,
-            average_score=round(mean(scores), 1),
-            student_count=len(scores),
+            branch=b_name or "Unknown",
+            average_score=round(float(b_avg), 1) if b_avg is not None else 0.0,
+            student_count=b_count,
         )
-        for branch_name, scores in branch_scores.items()
+        for b_name, b_avg, b_count in branch_stats_rows if b_name
     ]
 
-    # Pagination applies to the returned student list only - the aggregate
-    # widgets above (total_students, batch_average_score, branch_breakdown,
-    # flagged_students) are computed over the FULL filtered set, not just
-    # the current page, since a TPO expects "average readiness" to mean the
-    # whole filtered cohort, not just the 20 rows currently on screen.
-    total_matching = len(summaries)
-    total_pages = max(1, (total_matching + page_size - 1) // page_size)
-    start = (page - 1) * page_size
-    page_students = summaries[start : start + page_size]
+    # SQL LIMIT and OFFSET for paginated student rows ONLY (returns at most page_size rows)
+    paged_rows = (
+        query.order_by(User.name.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    paged_summaries = []
+    paged_flagged = []
+    for user_obj, score_obj in paged_rows:
+        comp = score_obj.composite_score if score_obj else None
+        risk = compute_risk_category(comp)
+        summary = StudentReadinessSummary(
+            user_id=user_obj.id,
+            name=user_obj.name,
+            email=user_obj.email,
+            branch=user_obj.branch,
+            grad_year=user_obj.grad_year,
+            latest_composite_score=comp,
+            flagged_low_readiness=(comp is not None and comp < LOW_READINESS_THRESHOLD),
+            risk_category=risk,
+        )
+        paged_summaries.append(summary)
+    flagged_rows = (
+        query.filter(
+            and_(
+                score_alias.composite_score.isnot(None),
+                score_alias.composite_score < LOW_READINESS_THRESHOLD,
+            )
+        )
+        .order_by(User.name.asc())
+        .limit(50)
+        .all()
+    )
+    all_flagged_summaries = [
+        StudentReadinessSummary(
+            user_id=u.id,
+            name=u.name,
+            email=u.email,
+            branch=u.branch,
+            grad_year=u.grad_year,
+            latest_composite_score=s.composite_score if s else None,
+            flagged_low_readiness=True,
+            risk_category=compute_risk_category(s.composite_score if s else None),
+        )
+        for u, s in flagged_rows
+    ]
 
     return TpoDashboardOut(
-        total_students=len(students),
-        students_with_score=len(scores_for_average),
-        batch_average_score=round(mean(scores_for_average), 1) if scores_for_average else None,
+        institution_name=current_user.institution_name if hasattr(current_user, "institution_name") else None,
+        total_students=total_institution_students,
+        students_with_score=total_matching,
+        batch_average_score=average_readiness_score,
         low_readiness_threshold=LOW_READINESS_THRESHOLD,
-        flagged_students=flagged,
-        branch_breakdown=branch_breakdown,
-        all_students=page_students,
+        filtered_students_count=total_matching,
         total_matching=total_matching,
         page=page,
         page_size=page_size,
         total_pages=total_pages,
+        flagged_students_count=flagged_students_count,
+        average_readiness_score=average_readiness_score,
+        branch_breakdown=branch_breakdown,
+        all_students=paged_summaries,
+        students=paged_summaries,
+        flagged_students=all_flagged_summaries,
     )
+
+
 
 
 @router.get("/students/{student_id}", response_model=TpoStudentDetailOut)
@@ -450,15 +469,64 @@ def create_intervention(
     current_user: User = Depends(get_current_tpo_or_admin_user),
 ):
     target_ids = [str(sid) for sid in payload.target_student_ids]
+    has_criteria = bool(
+        payload.target_branch
+        or payload.target_grad_year
+        or payload.target_readiness_min is not None
+        or payload.target_readiness_max is not None
+        or payload.target_risk
+        or payload.target_company_id
+    )
+
+    if not target_ids and not has_criteria:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide targeting criteria or select at least one student.",
+        )
 
     if not target_ids:
-        # Server-side eligibility query across entire institution
+        # MODE A: Server-side criteria eligibility query across entire institution
+        latest_score_subq = (
+            db.query(
+                ReadinessScore.user_id.label("user_id"),
+                func.max(ReadinessScore.computed_at).label("max_date")
+            )
+            .group_by(ReadinessScore.user_id)
+            .subquery()
+        )
+        score_alias = aliased(ReadinessScore)
         student_query = db.query(User).filter(User.role == "student")
         student_query = scope_to_institution(student_query, User, current_user)
+        student_query = student_query.outerjoin(latest_score_subq, User.id == latest_score_subq.c.user_id)\
+                                     .outerjoin(
+                                         score_alias,
+                                         and_(
+                                             score_alias.user_id == latest_score_subq.c.user_id,
+                                             score_alias.computed_at == latest_score_subq.c.max_date
+                                         )
+                                     )
+
         if payload.target_branch:
             student_query = student_query.filter(User.branch == payload.target_branch)
+        if payload.target_grad_year:
+            student_query = student_query.filter(User.grad_year == payload.target_grad_year)
+        if payload.target_readiness_min is not None:
+            student_query = student_query.filter(score_alias.composite_score >= payload.target_readiness_min)
+        if payload.target_readiness_max is not None:
+            student_query = student_query.filter(score_alias.composite_score <= payload.target_readiness_max)
+        if payload.target_risk:
+            if payload.target_risk == "high":
+                student_query = student_query.filter(and_(score_alias.composite_score.isnot(None), score_alias.composite_score < LOW_READINESS_THRESHOLD))
+            elif payload.target_risk == "moderate":
+                student_query = student_query.filter(and_(score_alias.composite_score >= LOW_READINESS_THRESHOLD, score_alias.composite_score < 70))
+            elif payload.target_risk == "low":
+                student_query = student_query.filter(score_alias.composite_score >= 70)
+        if payload.target_company_id:
+            target_str = str(payload.target_company_id)
+            student_query = student_query.filter(cast(User.target_company_ids, String).contains(target_str))
+
         eligible_students = student_query.all()
-        target_ids = [str(s.id) for s in eligible_students]
+        target_ids = [str(s.id) for s, _sc in eligible_students] if eligible_students and isinstance(eligible_students[0], tuple) else [str(s.id) for s in eligible_students]
     else:
         # IDOR / cross-tenant guard: every targeted student must belong to authorized institution
         student_query = db.query(User).filter(

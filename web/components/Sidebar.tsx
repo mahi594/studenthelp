@@ -300,29 +300,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
             </>
           )}
 
-          {isTpoOrAdmin && pathname.startsWith("/admin") && (
-            <div style={{ borderTop: "1px solid var(--line)", paddingTop: 14 }}>
-              <Link
-                href="/dashboard"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: collapsed ? "10px 0" : "9px 12px",
-                  justifyContent: collapsed ? "center" : "flex-start",
-                  borderRadius: 10,
-                  textDecoration: "none",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "var(--ink-soft)",
-                  background: "rgba(0,0,0,0.03)",
-                }}
-              >
-                <Icon name="grid" size={18} />
-                {!collapsed && <span>Switch to Student View</span>}
-              </Link>
-            </div>
-          )}
+          {/* Admin portal retains clear focused administrative navigation */}
         </div>
 
 

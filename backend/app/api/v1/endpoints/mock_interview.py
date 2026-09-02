@@ -85,6 +85,35 @@ def respond(
     return session
 
 
+def validate_mock_interview_scores(result: dict) -> dict:
+    if not isinstance(result, dict):
+        raise ValueError("AI evaluation output is not a valid JSON object")
+
+    required_fields = [
+        "overall_score",
+        "technical_knowledge",
+        "problem_solving",
+        "communication_score",
+        "answer_structure",
+        "technical_depth",
+    ]
+
+    validated = {}
+    for field in required_fields:
+        if field not in result:
+            raise ValueError(f"Missing required evaluation score: {field}")
+        val = result[field]
+        if not isinstance(val, (int, float)) or isinstance(val, bool):
+            raise ValueError(f"Score for {field} is not a valid number: {val}")
+        if not (0 <= val <= 100):
+            raise ValueError(f"Score for {field} is outside allowed 0-100 range: {val}")
+        validated[field] = int(round(val))
+
+    validated["strengths"] = result.get("strengths", [])
+    validated["improvements"] = result.get("improvements", [])
+    return validated
+
+
 @router.post("/{session_id}/finish", response_model=MockInterviewSessionOut)
 @limiter.limit("5/minute")
 def finish_session(
@@ -95,8 +124,7 @@ def finish_session(
 ):
     """Scores the full transcript and marks the session complete. Also
     recomputes the Readiness Score so the mock interview result is reflected
-    immediately (see readiness_service.py - mock interview is the third
-    weighted component)."""
+    immediately."""
     session = (
         db.query(MockInterviewSession)
         .filter(MockInterviewSession.id == session_id, MockInterviewSession.user_id == current_user.id)
@@ -107,35 +135,47 @@ def finish_session(
     if session.status != "in_progress":
         raise HTTPException(status_code=400, detail="This interview session has already been completed")
 
-    result = score_mock_interview(session.transcript)
+    try:
+        raw_result = score_mock_interview(session.transcript)
+        validated = validate_mock_interview_scores(raw_result)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="The interview evaluation could not be completed. Please try again.",
+        )
 
-    overall = result.get("overall_score", 75)
-    session.status = "completed"
-    session.overall_score = overall
-    session.feedback = {
-        "technical_knowledge": result.get("technical_knowledge", overall),
-        "problem_solving": result.get("problem_solving", overall),
-        "communication_score": result.get("communication_score", overall),
-        "answer_structure": result.get("answer_structure", overall),
-        "technical_depth": result.get("technical_depth", overall),
-        "strengths": result.get("strengths", []),
-        "improvements": result.get("improvements", []),
-    }
-    session.completed_at = datetime.utcnow()
+    try:
+        session.status = "completed"
+        session.overall_score = validated["overall_score"]
+        session.feedback = {
+            "technical_knowledge": validated["technical_knowledge"],
+            "problem_solving": validated["problem_solving"],
+            "communication_score": validated["communication_score"],
+            "answer_structure": validated["answer_structure"],
+            "technical_depth": validated["technical_depth"],
+            "strengths": validated["strengths"],
+            "improvements": validated["improvements"],
+        }
+        session.completed_at = datetime.utcnow()
+        db.flush()
 
-    db.commit()
-    db.refresh(session)
-
-    # Recompute readiness immediately so the new mock interview score counts right away
-    readiness_result = compute_readiness_score(current_user.id, db)
-    db.add(ReadinessScore(
-        user_id=current_user.id,
-        composite_score=readiness_result["composite_score"],
-        data_status=readiness_result["data_status"],
-        algorithm_version=readiness_result["algorithm_version"],
-        breakdown=readiness_result["breakdown"],
-    ))
-    db.commit()
+        # Recompute readiness immediately so the new mock interview score counts right away
+        readiness_result = compute_readiness_score(current_user.id, db)
+        db.add(ReadinessScore(
+            user_id=current_user.id,
+            composite_score=readiness_result["composite_score"],
+            data_status=readiness_result["data_status"],
+            algorithm_version=readiness_result["algorithm_version"],
+            breakdown=readiness_result["breakdown"],
+        ))
+        db.commit()
+        db.refresh(session)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to persist interview evaluation and update readiness score atomically."
+        )
 
     return session
 

@@ -123,20 +123,19 @@ def generate_plan(
     return plan
 
 
+from typing import Optional
+
 @router.get("/latest", response_model=PrepPlanOut)
 def get_latest_plan(
+    company_id: Optional[uuid.UUID] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Most recent prep plan for the logged-in student - drives the dashboard
-    'this week' teaser. Must be registered before /{plan_id} below, or
-    FastAPI would try to parse 'latest' as a plan_id UUID and 422."""
-    plan = (
-        db.query(PrepPlan)
-        .filter(PrepPlan.user_id == current_user.id)
-        .order_by(PrepPlan.created_at.desc())
-        .first()
-    )
+    """Most recent prep plan for the logged-in student (optionally scoped to company_id)."""
+    query = db.query(PrepPlan).filter(PrepPlan.user_id == current_user.id)
+    if company_id:
+        query = query.filter(PrepPlan.target_company_id == company_id)
+    plan = query.order_by(PrepPlan.created_at.desc()).first()
     if not plan:
         raise HTTPException(status_code=404, detail="No prep plan yet")
     return plan
@@ -154,3 +153,72 @@ def get_plan(
     if plan.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not your prep plan")
     return plan
+
+
+from app.schemas.schemas import PlanCustomizeRequest, PlanCustomizeResponse
+from app.services.ai_service import customize_plan_with_ai
+
+@router.post("/{plan_id}/customize", response_model=PlanCustomizeResponse)
+@limiter.limit("10/minute")
+def customize_prep_plan(
+    request: Request,
+    plan_id: uuid.UUID,
+    payload: PlanCustomizeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Conversational AI chatbot endpoint to customize a student's day-wise prep plan."""
+    plan = db.query(PrepPlan).filter(PrepPlan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Prep plan not found")
+    if plan.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not your prep plan")
+
+    company = None
+    if plan.target_company_id:
+        company = db.query(Company).filter(Company.id == plan.target_company_id).first()
+
+    student_profile = {
+        "name": current_user.name,
+        "branch": current_user.branch,
+        "grad_year": current_user.grad_year,
+    }
+
+    ai_res = customize_plan_with_ai(
+        plan_type="prep_plan",
+        current_plan_data={"days_total": plan.days_total, "tasks": plan.tasks, "progress_percent": plan.progress_percent},
+        user_message=payload.message,
+        conversation_history=payload.conversation_history,
+        student_profile=student_profile,
+        company_name=company.name if company else None,
+    )
+
+    if ai_res.get("plan_modified") and ai_res.get("updated_plan_data"):
+        updated_data = ai_res["updated_plan_data"]
+        if isinstance(updated_data, list):
+            plan.tasks = updated_data
+        elif isinstance(updated_data, dict):
+            if "tasks" in updated_data and isinstance(updated_data["tasks"], list):
+                plan.tasks = updated_data["tasks"]
+            if "days_total" in updated_data:
+                try:
+                    plan.days_total = int(updated_data["days_total"])
+                except (ValueError, TypeError):
+                    pass
+
+        # Recalculate progress percent server-side
+        tasks = list(plan.tasks or [])
+        total_tasks = len(tasks)
+        completed_count = sum(1 for t in tasks if isinstance(t, dict) and (t.get("completed") is True or t.get("status") == "completed"))
+        plan.progress_percent = round((completed_count / total_tasks) * 100) if total_tasks > 0 else 0
+
+        flag_modified(plan, "tasks")
+        db.commit()
+        db.refresh(plan)
+
+    return PlanCustomizeResponse(
+        explanation=ai_res.get("explanation", "Prep plan processing complete."),
+        plan_modified=bool(ai_res.get("plan_modified")),
+        prep_plan=plan,
+    )
+

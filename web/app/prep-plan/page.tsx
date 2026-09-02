@@ -4,6 +4,7 @@ import RequireAuth from "../../components/RequireAuth";
 import { useState, useEffect } from "react";
 import { listCompanies, generatePrepPlan, getLatestPrepPlan, updatePrepPlanTaskStatus, PrepPlan, PrepPlanTask } from "../../lib/api";
 import ReadinessLadder from "../../components/ReadinessLadder";
+import PlanChatPanel from "../../components/PlanChatPanel";
 
 function PrepPlanPageContent() {
   const [companies, setCompanies] = useState<any[]>([]);
@@ -107,7 +108,13 @@ function PrepPlanPageContent() {
 
       {plan && tasks.length > 0 && (
         <div style={{ marginTop: 32 }}>
-          <div className="card" style={{ padding: "20px 24px", marginBottom: 20 }}>
+          <PlanChatPanel
+            planType="prep_plan"
+            planId={plan.id}
+            onPlanUpdated={(updatedPlan) => setPlan(updatedPlan)}
+          />
+
+          <div className="card" style={{ padding: "20px 24px", marginTop: 24, marginBottom: 20 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <span style={{ fontWeight: 600, fontSize: 15 }}>Preparation Progress: {progressScore}%</span>
               <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>

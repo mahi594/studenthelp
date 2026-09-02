@@ -56,6 +56,22 @@ export async function updatePrepPlanTaskStatus(planId: string, taskIndex: number
   return res.data;
 }
 
+export async function customizePrepPlan(planId: string, message: string, conversationHistory: { role: string; content: string }[] = []) {
+  const res = await api.post(`/prep-plan/${planId}/customize`, {
+    message,
+    conversation_history: conversationHistory,
+  });
+  return res.data;
+}
+
+export async function customizeRoadmap(roadmapId: string, message: string, conversationHistory: { role: string; content: string }[] = []) {
+  const res = await api.post(`/roadmap/${roadmapId}/customize`, {
+    message,
+    conversation_history: conversationHistory,
+  });
+  return res.data;
+}
+
 export async function verifyCompany(companyId: string, payload: { verified_by: string; confidence?: string; source_type?: string }) {
   const res = await api.post(`/companies/${companyId}/verify`, payload);
   return res.data;
@@ -416,6 +432,13 @@ export async function uploadAndMatchResume(targetCompanyId: string, file: File) 
   return res.data;
 }
 
+export async function getResumeHistory(targetCompanyId?: string) {
+  const res = await api.get("/resume/history", {
+    params: { target_company_id: targetCompanyId || undefined },
+  });
+  return res.data;
+}
+
 // ---------- Email verification ----------
 export async function resendVerification(): Promise<{ message: string; dev_verify_token?: string }> {
   const res = await api.post("/auth/resend-verification");
@@ -522,6 +545,11 @@ export type JobListingItem = {
 
 export async function browseJobListings(params?: { company_name?: string; role?: string; location?: string }): Promise<JobListingItem[]> {
   const res = await api.get("/job-listings/", { params });
+  return res.data;
+}
+
+export async function searchJobListings(params: { keywords: string; location?: string; results_per_page?: number }): Promise<JobListingItem[]> {
+  const res = await api.get("/job-listings/search", { params });
   return res.data;
 }
 

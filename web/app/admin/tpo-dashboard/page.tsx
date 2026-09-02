@@ -78,20 +78,22 @@ function TpoDashboardPageContent() {
   async function handleCreateIntervention() {
     if (!newTitle.trim()) return;
     try {
-      // Targets students from the CURRENTLY LOADED page whose readiness is
-      // below the "On Track" threshold - if there are more matching
-      // students on other pages, narrow the filters/page size before
-      // creating the intervention so they're included too.
-      const targetIds = (data?.all_students || [])
-        .filter((s: any) => s.latest_composite_score !== null && s.latest_composite_score < 65)
-        .map((s: any) => s.user_id);
-
-      await api.post("/tpo/interventions", {
+      // Criteria-based intervention mode: send criteria to backend so the backend
+      // targets ALL eligible students across the ENTIRE institution, independent
+      // of current dashboard pagination or visible page.
+      const payload: Record<string, any> = {
         title: newTitle,
         skill_topic: newTopic,
         intervention_type: newType,
-        target_student_ids: targetIds,
-      });
+        target_student_ids: [],
+        target_readiness_max: readinessMax ? Number(readinessMax) : 65,
+      };
+      if (branch) payload.target_branch = branch;
+      if (gradYear) payload.target_grad_year = Number(gradYear);
+      if (readinessMin) payload.target_readiness_min = Number(readinessMin);
+      if (riskFilter !== "All") payload.target_risk = riskFilter.toLowerCase();
+
+      await api.post("/tpo/interventions", payload);
 
       setShowInterventionModal(false);
       setNewTitle("");

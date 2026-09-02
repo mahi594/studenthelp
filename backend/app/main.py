@@ -67,7 +67,10 @@ def run_replica_safe_job(lock_id: int, job_fn):
 
 @app.on_event("startup")
 def on_startup():
-    if settings.AUTO_CREATE_TABLES and not is_prod:
+    if is_prod:
+        if not (settings.S3_ACCESS_KEY_ID and settings.S3_SECRET_ACCESS_KEY):
+            raise RuntimeError("Production mode requires Object Storage (S3/R2) configuration. S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set.")
+    elif settings.AUTO_CREATE_TABLES:
         Base.metadata.create_all(bind=engine)
 
     def _run_leetcode_reminders_job():

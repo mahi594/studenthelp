@@ -1,3 +1,4 @@
+from typing import Optional
 import uuid
 import io
 import os
@@ -94,6 +95,43 @@ def upload_and_match(
     return resume
 
 
+@router.get("/latest", response_model=Optional[ResumeMatchOut])
+def get_latest_resume_for_company(
+    target_company_id: Optional[uuid.UUID] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retrieves the current user's latest resume analysis specifically scoped
+    to target_company_id. Returns null (HTTP 200) if no match exists for this company."""
+    query = db.query(Resume).filter(Resume.user_id == current_user.id)
+    if target_company_id:
+        query = query.filter(Resume.target_company_id == target_company_id)
+    resume = query.order_by(Resume.created_at.desc()).first()
+    if not resume:
+        return None
+    if resume.storage_key:
+        resume.file_url = get_presigned_resume_url(resume.storage_key)
+    return resume
+
+
+@router.get("/history", response_model=list[ResumeMatchOut])
+def get_resume_history(
+    target_company_id: Optional[uuid.UUID] = None,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retrieves past ATS resume scans for the logged-in student, newest first."""
+    query = db.query(Resume).filter(Resume.user_id == current_user.id)
+    if target_company_id:
+        query = query.filter(Resume.target_company_id == target_company_id)
+    resumes = query.order_by(Resume.created_at.desc()).limit(limit).all()
+    for r in resumes:
+        if r.storage_key:
+            r.file_url = get_presigned_resume_url(r.storage_key)
+    return resumes
+
+
 @router.get("/{resume_id}", response_model=ResumeMatchOut)
 def get_resume(
     resume_id: uuid.UUID,
@@ -120,4 +158,5 @@ def refresh_resume_url(
 ):
     """Regenerates a fresh presigned URL from stored storage_key."""
     return get_resume(resume_id, db, current_user)
+
 

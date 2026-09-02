@@ -137,7 +137,16 @@ def mock_ai(mocker):
     mocker.patch("app.api.v1.endpoints.mock_interview.continue_mock_interview", return_value="Good - what was the outcome?")
     mocker.patch(
         "app.api.v1.endpoints.mock_interview.score_mock_interview",
-        return_value={"overall_score": 68, "strengths": ["Clear communication"], "improvements": ["More depth on tradeoffs"]},
+        return_value={
+            "overall_score": 68,
+            "technical_knowledge": 70,
+            "problem_solving": 65,
+            "communication_score": 75,
+            "answer_structure": 60,
+            "technical_depth": 70,
+            "strengths": ["Clear communication"],
+            "improvements": ["More depth on tradeoffs"],
+        },
     )
 
 

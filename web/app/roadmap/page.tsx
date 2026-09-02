@@ -4,11 +4,13 @@ import RequireAuth from "../../components/RequireAuth";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { listCompanies, getLatestRoadmap, generateRoadmap, RoadmapPhase } from "../../lib/api";
+import PlanChatPanel from "../../components/PlanChatPanel";
 
 function RoadmapPageContent() {
   const [companies, setCompanies] = useState<any[]>([]);
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [horizonMonths, setHorizonMonths] = useState(6);
+  const [roadmapId, setRoadmapId] = useState<string | null>(null);
   const [phases, setPhases] = useState<RoadmapPhase[]>([]);
   const [createdAt, setCreatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -21,6 +23,7 @@ function RoadmapPageContent() {
         const [companiesData, existing] = await Promise.all([listCompanies(), getLatestRoadmap()]);
         setCompanies(companiesData);
         if (existing) {
+          setRoadmapId(existing.id);
           setPhases(existing.phases || []);
           setCreatedAt(existing.created_at);
           setHorizonMonths(existing.horizon_months);
@@ -44,6 +47,7 @@ function RoadmapPageContent() {
     setError(null);
     try {
       const roadmap = await generateRoadmap(horizonMonths, selectedCompanies);
+      setRoadmapId(roadmap.id);
       setPhases(roadmap.phases || []);
       setCreatedAt(roadmap.created_at);
     } catch (e: any) {
@@ -128,7 +132,18 @@ function RoadmapPageContent() {
 
       {!initialLoading && phases.length > 0 && (
         <div style={{ marginTop: 36 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          {roadmapId && (
+            <PlanChatPanel
+              planType="roadmap"
+              planId={roadmapId}
+              onPlanUpdated={(updatedRoadmap) => {
+                if (updatedRoadmap?.phases) setPhases(updatedRoadmap.phases);
+                if (updatedRoadmap?.horizon_months) setHorizonMonths(updatedRoadmap.horizon_months);
+              }}
+            />
+          )}
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 24, marginBottom: 20 }}>
             <h2 style={{ fontSize: 22, margin: 0 }}>Interactive Roadmap Timeline</h2>
             {createdAt && (
               <span className="mono" style={{ fontSize: 12, color: "var(--ink-soft)" }}>

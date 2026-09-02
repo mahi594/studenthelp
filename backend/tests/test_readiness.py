@@ -57,13 +57,15 @@ def test_tpo_dashboard_flags_low_readiness_students(client, db_session, register
     # A separate admin account - promoting registered_user itself would
     # remove them from the dashboard's student list (it filters role='student')
     client.post("/api/v1/auth/register", json={
-        "name": "TPO Admin", "email": "tpo@example.com", "password": "adminpass123",
+        "name": "TPO Admin", "email": "tpo_readiness_admin@example.com", "password": "adminpass123",
     })
-    admin = db_session.query(User).filter(User.email == "tpo@example.com").first()
+    reg_student = db_session.query(User).filter(User.email == registered_user["email"]).first()
+    admin = db_session.query(User).filter(User.email == "tpo_readiness_admin@example.com").first()
     admin.role = "admin"
+    admin.institution_id = reg_student.institution_id
     db_session.commit()
     login_res = client.post("/api/v1/auth/login", data={
-        "grant_type": "password", "username": "tpo@example.com", "password": "adminpass123",
+        "grant_type": "password", "username": "tpo_readiness_admin@example.com", "password": "adminpass123",
     })
     admin_headers = {"Authorization": f"Bearer {login_res.json()['access_token']}"}
 

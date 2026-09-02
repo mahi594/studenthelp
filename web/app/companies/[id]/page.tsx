@@ -12,25 +12,28 @@ export default function CompanyDetailPage() {
   const [company, setCompany] = useState<any>(null);
   const [readiness, setReadiness] = useState<any>(null);
   const [prepPlan, setPrepPlan] = useState<any>(null);
+  const [resumeMatch, setResumeMatch] = useState<any>(null);
   const [applicationStatus, setApplicationStatus] = useState<string>("not_applied");
   const [loading, setLoading] = useState(true);
 
   async function loadData() {
     setLoading(true);
     try {
-      const [compRes, readRes, prepRes, appsRes] = await Promise.all([
+      const [compRes, readRes, prepRes, appsRes, resumeRes] = await Promise.all([
         api.get(`/companies/${companyId}`).catch(async () => {
           const all = await api.get("/companies/");
           return { data: all.data.find((c: any) => c.id === companyId) };
         }),
         getLatestReadiness().catch(() => null),
-        api.get("/prep-plan/latest").catch(() => null),
+        api.get(`/prep-plan/latest?company_id=${companyId}`).catch(() => null),
         listMyApplications().catch(() => []),
+        api.get(`/resume/latest?target_company_id=${companyId}`).catch(() => null),
       ]);
 
       setCompany(compRes.data || null);
       setReadiness(readRes);
       setPrepPlan(prepRes?.data || null);
+      setResumeMatch(resumeRes?.data || null);
 
       const appMatch = appsRes.find((a: any) => a.company_id === companyId);
       if (appMatch) {
@@ -184,7 +187,7 @@ export default function CompanyDetailPage() {
       {/* READINESS & SKILL GAPS */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
         <div className="card" style={{ padding: 24 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>My Placement Readiness</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>Overall Placement Readiness</h3>
           <div style={{ fontSize: 32, fontWeight: 800, color: isAssessed ? "var(--primary)" : "var(--ink-soft)" }}>
             {isAssessed ? `${overallScore}%` : "Not Assessed"}
           </div>
@@ -194,7 +197,7 @@ export default function CompanyDetailPage() {
         </div>
 
         <div className="card" style={{ padding: 24 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>Identified Skill Gaps</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>Relevant Skill Gaps</h3>
           {weaknesses.length > 0 ? (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {weaknesses.map((w: string) => (
@@ -217,9 +220,22 @@ export default function CompanyDetailPage() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
           <div>
             <h4 style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-soft)" }}>Resume Match</h4>
-            <p style={{ fontSize: 14, marginTop: 6 }}>
-              Upload your resume to see your company-specific match and keyword breakdown.
-            </p>
+            {resumeMatch?.match_result ? (
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "var(--primary)" }}>
+                  {resumeMatch.match_result.match_score_percent}% Match
+                </div>
+                {resumeMatch.match_result.missing_keywords?.length > 0 && (
+                  <p style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 4 }}>
+                    Missing keywords: {resumeMatch.match_result.missing_keywords.join(", ")}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p style={{ fontSize: 14, marginTop: 6, color: "var(--ink-soft)" }}>
+                Upload your resume to see your company-specific match.
+              </p>
+            )}
             <button onClick={() => router.push("/resume")} className="btn btn-secondary" style={{ marginTop: 10, fontSize: 13 }}>
               Upload / Analyze Resume →
             </button>

@@ -170,27 +170,61 @@ def generate_prep_plan(
     return _extract_json(text)
 
 
-def build_resume_match_prompt(resume_text: str, company: Company) -> str:
-    return f"""Compare this resume against the target company's known requirements.
-Only use the requirements listed below - do not assume requirements not given.
+def build_resume_match_prompt(resume_text: str, company: Company, job_description: Optional[str] = None) -> str:
+    target_info = f"Company: {company.name}\nPreferred branches: {company.preferred_branches}\nMinimum CGPA: {company.min_cgpa}\nResume keywords they filter for: {company.resume_keywords}"
+    if job_description:
+        target_info += f"\nJob Description / Role Requirements: {job_description}"
 
-Company: {company.name}
-Preferred branches: {company.preferred_branches}
-Minimum CGPA: {company.min_cgpa}
-Resume keywords they filter for: {company.resume_keywords}
+    return f"""Analyze this resume as a professional Applicant Tracking System (ATS) screening engine against the specified target company/job.
 
-Resume text:
+Target Context:
+{target_info}
+
+Resume Text:
 ---
 {resume_text}
 ---
 
-Return ONLY valid JSON (no markdown):
+Perform a thorough, deterministic analysis and return ONLY valid JSON (no markdown or preamble) with this exact structure:
 {{
+  "ats_score": 0-100,
   "match_score_percent": 0-100,
+  "keyword_match_percent": 0-100,
+  "section_detection": {{
+    "contact_info": true/false,
+    "education": true/false,
+    "experience": true/false,
+    "projects": true/false,
+    "skills": true/false,
+    "certifications": true/false,
+    "achievements": true/false
+  }},
+  "detected_sections": ["string"],
+  "missing_sections": ["string"],
+  "matched_skills": ["string"],
+  "missing_skills": ["string"],
+  "matched_keywords": ["string"],
   "missing_keywords": ["string"],
-  "suggestions": ["specific, actionable bullet-level suggestions"],
+  "experience_alignment": "string - brief evaluation of relevance",
+  "education_match": "string - brief evaluation",
+  "role_alignment": "string - alignment with target role",
+  "quality_warnings": ["specific formatting, ATS-readability, or bullet point quality warnings"],
+  "recommendations": ["actionable numbered suggestions to improve the resume score"],
+  "suggestions": ["bullet-level suggestions"],
   "meets_cgpa_cutoff": true/false/null
 }}"""
+
+
+def match_resume_to_company(resume_text: str, company: Company, job_description: Optional[str] = None) -> Dict[str, Any]:
+    prompt = build_resume_match_prompt(resume_text, company, job_description)
+    text = _generate(prompt, max_tokens=2500)
+    result = _extract_json(text)
+    # Guarantee backwards compatibility for existing frontend/test fields
+    if "match_score_percent" in result and "ats_score" not in result:
+        result["ats_score"] = result["match_score_percent"]
+    elif "ats_score" in result and "match_score_percent" not in result:
+        result["match_score_percent"] = result["ats_score"]
+    return result
 
 
 def build_quiz_generation_prompt(
@@ -247,12 +281,6 @@ def generate_quiz_questions(
     return _extract_json(text)
 
 
-def match_resume_to_company(resume_text: str, company: Company) -> Dict[str, Any]:
-    prompt = build_resume_match_prompt(resume_text, company)
-    text = _generate(prompt, max_tokens=1500)
-    return _extract_json(text)
-
-
 # ---------------------------------------------------------------------------
 # Roadmap: longer-horizon, performance-driven plan (re-generated as scores change)
 # ---------------------------------------------------------------------------
@@ -299,6 +327,56 @@ def generate_roadmap(
     prompt = build_roadmap_prompt(quiz_results, horizon_months, target_company_names)
     text = _generate(prompt, max_tokens=3000)
     return _extract_json(text)
+
+
+PLAN_CUSTOMIZER_SYSTEM_PROMPT = """You are an expert AI plan customization agent for StudentHelp.
+Your job is to assist a student in customizing their active Placement Roadmap or Day-wise Prep Plan based on their conversational input (e.g. daily hour constraints, known topics to skip, upcoming interview deadlines, weak subjects to prioritize, rest days, reordering tasks).
+
+Rules:
+1. Understand the student's request and current plan context.
+2. If the student asks a question about the plan (e.g., "Why is DSA on day 3?"), explain clearly and set "plan_modified": false.
+3. If the student requests a valid modification to their plan (e.g., "Reduce daily hours to 2", "Skip arrays", "I have an interview in 21 days", "Don't study on Sundays"):
+   - Interpret the request
+   - Modify the plan structure appropriately
+   - Set "plan_modified": true in the response
+   - Return the updated plan in the exact JSON schema requested below.
+4. Do NOT hallucinate unverified company facts.
+5. Return ONLY valid JSON (no markdown or preamble).
+
+Required JSON Output Format:
+{
+  "explanation": "Friendly, conversational response explaining what was answered or modified",
+  "plan_modified": true/false,
+  "updated_plan_data": { ... } // Updated phases array for Roadmap OR updated tasks array + days_total for PrepPlan (or null if plan_modified is false)
+}"""
+
+
+def customize_plan_with_ai(
+    plan_type: str,  # "roadmap" or "prep_plan"
+    current_plan_data: Dict[str, Any],
+    user_message: str,
+    conversation_history: List[Dict[str, str]],
+    student_profile: Dict[str, Any],
+    company_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    context_json = json.dumps({
+        "plan_type": plan_type,
+        "student_profile": student_profile,
+        "company_name": company_name,
+        "current_plan_data": current_plan_data,
+        "conversation_history": conversation_history[-6:],
+    })
+
+    prompt = f"""Current Plan & Student Context:
+{context_json}
+
+Student Request: "{user_message}"
+
+Return JSON adhering strictly to PLAN_CUSTOMIZER_SYSTEM_PROMPT."""
+
+    text = _generate(prompt, max_tokens=3500, system_instruction=PLAN_CUSTOMIZER_SYSTEM_PROMPT)
+    result = _extract_json(text)
+    return result
 
 
 # ---------------------------------------------------------------------------

@@ -1,104 +1,271 @@
 "use client";
-import RequireAuth from "../../components/RequireAuth";
 
+import RequireAuth from "../../components/RequireAuth";
 import { useEffect, useState } from "react";
-import { browseJobListings, refreshJobListings, JobListingItem } from "../../lib/api";
-import { useAuth } from "../../lib/auth-context";
+import {
+  browseJobListings,
+  searchJobListings,
+  JobListingItem,
+} from "../../lib/api";
 
 function JobsPageContent() {
-  const { isAdmin } = useAuth();
   const [listings, setListings] = useState<JobListingItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [roleFilter, setRoleFilter] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const [keywords, setKeywords] = useState("software engineer");
+  const [search, setSearch] = useState("");
   const [location, setLocation] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
 
-  async function load() {
+  const [error, setError] = useState<string | null>(null);
+
+  async function searchJobs() {
+    const keywords = search.trim();
+
+    if (!keywords) {
+      setError("Please enter a job role to search.");
+      return;
+    }
+
     setLoading(true);
+    setError(null);
+
     try {
-      const data = await browseJobListings(roleFilter ? { role: roleFilter } : undefined);
+      // Call dedicated student search endpoint (GET /job-listings/search)
+      const data = await searchJobListings({
+        keywords,
+        location: location.trim() || undefined,
+        results_per_page: 20,
+      });
+
       setListings(data);
+    } catch (e: any) {
+      console.error("Job search failed:", e);
+
+      setError(
+        e?.response?.data?.detail ||
+          "Unable to fetch jobs right now. Please try again."
+      );
+
+      setListings([]);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roleFilter]);
+    // Load existing jobs when page opens
+    async function loadInitialJobs() {
+      setLoading(true);
 
-  async function handleRefresh() {
-    setRefreshing(true);
-    setRefreshMessage(null);
-    setRefreshError(null);
-    try {
-      const res = await refreshJobListings({ keywords, location: location || undefined });
-      setRefreshMessage(`Fetched ${res.fetched}, added ${res.created} new (${res.skipped_duplicates} already known).`);
-      load();
-    } catch (e: any) {
-      setRefreshError(e?.response?.data?.detail || "Failed to refresh listings - check Adzuna API keys are set.");
-    } finally {
-      setRefreshing(false);
+      try {
+        const data = await browseJobListings();
+        setListings(data);
+      } catch (e) {
+        console.error("Failed to load jobs:", e);
+      } finally {
+        setLoading(false);
+      }
     }
-  }
+
+    loadInitialJobs();
+  }, []);
 
   return (
-    <main style={{ maxWidth: 760, margin: "0 auto", padding: "48px 24px" }}>
-      <h1 style={{ fontSize: 32 }}>Job listings</h1>
-      <p style={{ color: "var(--ink-soft)", marginTop: 8 }}>
-        Live openings pulled in from Adzuna, refreshed periodically.
+    <main
+      style={{
+        maxWidth: 900,
+        margin: "0 auto",
+        padding: "48px 24px",
+      }}
+    >
+      <h1 style={{ fontSize: 32 }}>Job Listings</h1>
+
+      <p
+        style={{
+          color: "var(--ink-soft)",
+          marginTop: 8,
+        }}
+      >
+        Search live job openings directly from Adzuna.
       </p>
 
-      {isAdmin && (
-        <div className="card" style={{ padding: 20, marginTop: 20 }}>
-          <span className="mono" style={{ fontSize: 11, color: "var(--ink-soft)" }}>ADMIN: REFRESH LISTINGS</span>
-          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-            <input value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="Keywords" style={{ flex: 1, minWidth: 160 }} />
-            <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Location (optional)" style={{ flex: 1, minWidth: 160 }} />
-            <button onClick={handleRefresh} disabled={refreshing} className="btn btn-primary">
-              {refreshing ? "Fetching..." : "Refresh from Adzuna"}
-            </button>
-          </div>
-          {refreshMessage && <p style={{ fontSize: 13, color: "var(--primary)", marginTop: 10 }}>{refreshMessage}</p>}
-          {refreshError && <p style={{ fontSize: 13, color: "var(--danger)", marginTop: 10 }}>{refreshError}</p>}
+      {/* SEARCH BOX */}
+      <div
+        className="card"
+        style={{
+          padding: 20,
+          marginTop: 24,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            flexWrap: "wrap",
+          }}
+        >
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                searchJobs();
+              }
+            }}
+            placeholder="Search job role (e.g. Software Engineer)"
+            style={{
+              flex: 2,
+              minWidth: 250,
+            }}
+          />
+
+          <input
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                searchJobs();
+              }
+            }}
+            placeholder="Location (e.g. Bangalore)"
+            style={{
+              flex: 1,
+              minWidth: 180,
+            }}
+          />
+
+          <button
+            onClick={searchJobs}
+            disabled={loading}
+            className="btn btn-primary"
+          >
+            {loading ? "Searching..." : "Search Jobs"}
+          </button>
         </div>
+
+        {error && (
+          <p
+            style={{
+              color: "var(--danger)",
+              marginTop: 12,
+              fontSize: 14,
+            }}
+          >
+            {error}
+          </p>
+        )}
+      </div>
+
+      {/* RESULTS */}
+      {loading && (
+        <p
+          style={{
+            color: "var(--ink-soft)",
+            marginTop: 24,
+          }}
+        >
+          Searching live jobs...
+        </p>
       )}
 
-      <input
-        value={roleFilter}
-        onChange={(e) => setRoleFilter(e.target.value)}
-        placeholder="Filter by role (e.g. SDE)"
-        style={{ width: "100%", marginTop: 24 }}
-      />
+      {!loading && listings.length > 0 && (
+        <p
+          style={{
+            color: "var(--ink-soft)",
+            marginTop: 24,
+            fontSize: 14,
+          }}
+        >
+          Found {listings.length} job listings
+        </p>
+      )}
 
-      {loading && <p style={{ color: "var(--ink-soft)", marginTop: 24 }}>Loading...</p>}
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 20 }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+          marginTop: 20,
+        }}
+      >
         {listings.map((job) => (
-          <div key={job.id} className="card" style={{ padding: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+          <div
+            key={job.id}
+            className="card"
+            style={{
+              padding: 20,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: 16,
+              }}
+            >
               <div>
-                <h3 style={{ fontSize: 17 }}>{job.role_title}</h3>
-                <p style={{ fontSize: 14, color: "var(--ink-soft)", marginTop: 4 }}>
-                  {job.company_name}{job.location ? ` · ${job.location}` : ""}
+                <h3 style={{ fontSize: 17 }}>
+                  {job.role_title}
+                </h3>
+
+                <p
+                  style={{
+                    fontSize: 14,
+                    color: "var(--ink-soft)",
+                    marginTop: 5,
+                  }}
+                >
+                  {job.company_name}
+                  {job.location ? ` · ${job.location}` : ""}
+                  {job.posted_at ? ` · Posted ${new Date(job.posted_at).toLocaleDateString()}` : ""}
                 </p>
+                {job.description_snippet && (
+                  <p
+                    style={{
+                      fontSize: 13,
+                      color: "var(--ink-soft)",
+                      marginTop: 10,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {job.description_snippet.length > 250
+                      ? `${job.description_snippet.substring(0, 250)}...`
+                      : job.description_snippet}
+                  </p>
+                )}
               </div>
-              <a href={job.apply_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={{ textDecoration: "none", fontSize: 13, whiteSpace: "nowrap" }}>
+
+              <a
+                href={job.apply_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-primary"
+                style={{
+                  textDecoration: "none",
+                  fontSize: 13,
+                  whiteSpace: "nowrap",
+                }}
+              >
                 Apply →
               </a>
             </div>
           </div>
         ))}
 
-        {!loading && listings.length === 0 && (
-          <div className="card" style={{ padding: 32, textAlign: "center" }}>
-            <p style={{ color: "var(--ink-soft)" }}>
-              {isAdmin ? "No listings yet - fetch some above." : "No listings available right now."}
+        {!loading && listings.length === 0 && !error && (
+          <div
+            className="card"
+            style={{
+              padding: 32,
+              textAlign: "center",
+            }}
+          >
+            <p
+              style={{
+                color: "var(--ink-soft)",
+              }}
+            >
+              Search for a job role to see available openings.
             </p>
           </div>
         )}

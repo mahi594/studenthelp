@@ -304,7 +304,9 @@ class AuditLogOut(BaseModel):
 class ResumeMatchOut(BaseModel):
     id: uuid.UUID
     file_url: str
+    target_company_id: Optional[uuid.UUID] = None
     match_result: Optional[Dict[str, Any]]
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -326,6 +328,18 @@ class RoadmapOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PlanCustomizeRequest(BaseModel):
+    message: str
+    conversation_history: List[Dict[str, str]] = []
+
+
+class PlanCustomizeResponse(BaseModel):
+    explanation: str
+    plan_modified: bool
+    roadmap: Optional[RoadmapOut] = None
+    prep_plan: Optional[PrepPlanOut] = None
 
 
 # ---------- Quiz Questions (AI-generated, admin-approved) ----------
@@ -432,6 +446,11 @@ class InterventionCreate(BaseModel):
     skill_topic: str
     intervention_type: str = "workshop"
     target_branch: Optional[str] = None
+    target_grad_year: Optional[int] = None
+    target_readiness_min: Optional[int] = None
+    target_readiness_max: Optional[int] = None
+    target_risk: Optional[str] = None
+    target_company_id: Optional[uuid.UUID] = None
     target_student_ids: List[uuid.UUID] = []
 
 
@@ -546,19 +565,21 @@ class TpoStudentDetailOut(BaseModel):
 
 class TpoDashboardOut(BaseModel):
     total_students: int
-    students_with_score: int
-    batch_average_score: Optional[float]
-    low_readiness_threshold: int
-    flagged_students: List[StudentReadinessSummary]
-    branch_breakdown: List[BranchBreakdown]
-    # `all_students` is the current PAGE of students matching the filters -
-    # not the whole institution. Use total_matching/page/page_size/total_pages
-    # to page through the full filtered list.
-    all_students: List[StudentReadinessSummary]
-    total_matching: int
-    page: int
-    page_size: int
-    total_pages: int
+    students_with_score: int = 0
+    batch_average_score: Optional[float] = None
+    low_readiness_threshold: int = 50
+    flagged_students: List[StudentReadinessSummary] = []
+    branch_breakdown: List[BranchBreakdown] = []
+    all_students: List[StudentReadinessSummary] = []
+    students: List[StudentReadinessSummary] = []
+    total_matching: int = 0
+    filtered_students_count: int = 0
+    flagged_students_count: int = 0
+    average_readiness_score: Optional[float] = None
+    institution_name: Optional[str] = None
+    page: int = 1
+    page_size: int = 20
+    total_pages: int = 1
 
 
 # ---------- Job Listings (live openings, auto-fetched) ----------

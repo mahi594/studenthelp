@@ -1,7 +1,7 @@
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -18,6 +18,7 @@ from app.services.job_listing_service import (
     delete_expired_listings,
 )
 from app.api.v1.endpoints.auth import get_current_admin_user, get_current_user
+from app.core.rate_limit import limiter
 
 router = APIRouter(prefix="/job-listings", tags=["job-listings"])
 logger = logging.getLogger(__name__)
@@ -60,6 +61,58 @@ def refresh_job_listings(
     )
 
 
+@router.get("/search", response_model=List[JobListingOut])
+@limiter.limit("10/minute")
+def search_job_listings(
+    request: Request,
+    keywords: str,
+    location: Optional[str] = None,
+    results_per_page: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Student-facing direct Adzuna search. Fetches live openings, persists them to local DB,
+    and returns matching job listings to the student."""
+    if not keywords or not keywords.strip():
+        raise HTTPException(status_code=400, detail="Keywords parameter is required.")
+
+    clean_keywords = keywords.strip()
+    clean_location = (location or "").strip()
+    clamped_results_per_page = max(1, min(results_per_page, 50))
+
+    try:
+        raw_results = fetch_listings_from_adzuna(
+            keywords=clean_keywords,
+            location=clean_location,
+            results_per_page=clamped_results_per_page,
+        )
+    except RuntimeError as exc:
+        # Configuration issues (e.g. missing credentials)
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        logger.exception("Failed to fetch job listings from external provider during student search")
+        raise HTTPException(status_code=502, detail="Failed to fetch job listings right now. Please try again shortly.")
+
+    if raw_results:
+        upsert_job_listings(raw_results, db)
+
+    # Return matching results sorted by posted_at
+    query = db.query(JobListing)
+    if clean_keywords:
+        # Filter by keywords in role_title or description or company_name
+        kw_filter = f"%{clean_keywords}%"
+        query = query.filter(
+            (JobListing.role_title.ilike(kw_filter)) |
+            (JobListing.description_snippet.ilike(kw_filter)) |
+            (JobListing.company_name.ilike(kw_filter))
+        )
+    if clean_location:
+        query = query.filter(JobListing.location.ilike(f"%{clean_location}%"))
+
+    results = query.order_by(JobListing.posted_at.desc()).limit(clamped_results_per_page).all()
+    return results
+
+
 @router.get("/", response_model=List[JobListingOut])
 def browse_job_listings(
     company_name: Optional[str] = None,
@@ -81,3 +134,4 @@ def browse_job_listings(
         query = query.filter(JobListing.location.ilike(f"%{location}%"))
 
     return query.order_by(JobListing.posted_at.desc()).limit(limit).all()
+
