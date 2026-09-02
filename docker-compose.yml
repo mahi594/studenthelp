@@ -44,12 +44,14 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080/api/v1}
     container_name: studenthelp-frontend
     restart: unless-stopped
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
     ports:
       - "3000:3000"
     depends_on:
       backend:
         condition: service_started
-
 volumes:
   studenthelp_pgdata:
     external: true
