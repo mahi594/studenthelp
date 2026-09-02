@@ -15,9 +15,9 @@ COPY . .
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD-SHELL curl -f http://localhost:${PORT:-8000}/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
-# Run migrations then start the server. In production, prefer running
-# migrations as a separate release step instead of on every container start.
+# Run migrations then start the server.
+# In production, prefer running migrations as a separate release step instead of on every container start.
 
 CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
