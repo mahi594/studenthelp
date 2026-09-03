@@ -74,6 +74,7 @@ Browser  --->  Next.js (Vercel)  --->  FastAPI (Render)  --->  Adzuna Jobs API
 - **Forgot Password**: Password reset email workflow protected against account enumeration.
 - **Direct Job Search**: Live job search powered by Adzuna with role, location, and criteria filters without exposing API credentials client-side.
 - **ATS Resume Analyzer & Tracker**: Comprehensive resume scan with ATS score, section breakdown (Education, Experience, Skills, Certifications), matched/missing keywords, formatting quality checks, and historical scan progress tracking.
+- **LeetCode Practice & Progress Tracker**: Track solved LeetCode problems (Easy, Medium, Hard), receive automated problem recommendations based on quiz weakness, and log completed problems to boost DSA readiness scores.
 - **Placement Roadmap Generation**: Long-term career roadmap generation ordered by diagnostic quiz performance.
 - **Roadmap AI Customization**: Conversational AI chatbot panel allowing students to request roadmap adjustments (e.g. shift timelines, reorder priorities).
 - **Preparation Plan Generation**: Day-wise targeted prep plan tailored to student goals and specific company round structures.
@@ -84,8 +85,10 @@ Browser  --->  Next.js (Vercel)  --->  FastAPI (Render)  --->  Adzuna Jobs API
 ### Admin / TPO Portal
 - **Institution Management**: Scope accounts and data isolation by educational institution.
 - **User & Admin Creation**: Admin user creation generating secure temporary passwords sent directly to the new user's email address.
+- **LeetCode Batch Analytics Tracker**: Institutional view of student LeetCode practice metrics, solved problem counts, and institution-scoped practice activity.
 - **TPO Placement Cell Dashboard**: Real-time batch readiness scores, risk category classification, and student status.
-- **Targeted Interventions & Impact Tracker**: Log pre/post intervention scores using real student reassessment data.
+- **TPO Targeted Interventions Across Multiple Pages**: Create, manage, and assign custom interventions (workshops, mock tests, 1-on-1 counseling) targeting specific students or low-readiness cohorts across multiple dashboard views and student detail pages.
+- **Intervention Pre/Post Impact Tracker**: Measure baseline score vs post-intervention score using real student reassessment data — an intervention that hasn't been reassessed yet is reported as "Post-assessment not completed" (never a fabricated number).
 - **Institutional Report Export**: One-click CSV export (`GET /api/v1/tpo/export`) robustly formatted with null-score safeguards.
 
 ---
@@ -158,64 +161,6 @@ studenthelp/
 ├── docker-compose.yml
 ├── .env.example
 └── README.md
-```
-
----
-
-## 🔑 Environment Variables
-
-> **IMPORTANT**: Never commit actual secret keys or environment files to version control.
-
-### Backend (`backend/.env`)
-```ini
-# PostgreSQL Database
-DATABASE_URL=postgresql://user:password@host:5432/dbname
-AUTO_CREATE_TABLES=false
-
-# Authentication & JWT
-SECRET_KEY=your-secure-random-jwt-secret
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=10080
-
-# AI Provider Credentials
-GEMINI_API_KEY=your-gemini-api-key
-GROQ_API_KEY=your-groq-api-key
-
-# Job Search Integration (Adzuna)
-ADZUNA_APP_ID=your-adzuna-app-id
-ADZUNA_APP_KEY=your-adzuna-app-key
-ADZUNA_COUNTRY=in
-
-# S3 / Cloudflare R2 / Backblaze Storage (Optional)
-S3_ENDPOINT_URL=
-S3_ACCESS_KEY_ID=
-S3_SECRET_ACCESS_KEY=
-S3_BUCKET_NAME=studenthelp-resumes
-S3_REGION=auto
-S3_PUBLIC_URL_BASE=
-
-# Legacy SMTP (Optional / Fallback)
-SMTP_HOST=
-SMTP_PORT=587
-SMTP_USER=
-SMTP_PASSWORD=
-SMTP_FROM_EMAIL=
-
-# Google Apps Script Production Email Relay
-APPS_SCRIPT_EMAIL_URL=https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec
-APPS_SCRIPT_SHARED_SECRET=your-secure-shared-secret-key
-
-# Frontend URLs & CORS
-FRONTEND_URL=https://studenthelp-hl9z.vercel.app
-BACKEND_PUBLIC_URL=https://studenthelp-8dhh.onrender.com
-ENV=production
-CORS_ORIGINS=https://studenthelp-hl9z.vercel.app
-SENTRY_DSN=
-```
-
-### Frontend (`web/.env.production`)
-```ini
-NEXT_PUBLIC_API_URL=https://studenthelp-8dhh.onrender.com/api/v1
 ```
 
 ---
