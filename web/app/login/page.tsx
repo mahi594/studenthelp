@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { login } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
+import PasswordInput from "../../components/PasswordInput";
 
 export default function LoginPage() {
   // useSearchParams() opts this subtree out of static rendering unless it's
@@ -67,17 +68,21 @@ function LoginForm() {
           style={{ width: "100%" }}
         />
 
-        <label style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginTop: 16, marginBottom: 6 }}>
-          Password
-        </label>
-        <input
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          type="password"
-          placeholder="••••••••"
-          style={{ width: "100%" }}
-        />
+        <div style={{ marginTop: 16 }}>
+          <PasswordInput
+            label="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            placeholder="••••••••"
+          />
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+          <Link href="/forgot-password" style={{ fontSize: 13, textDecoration: "none", color: "var(--primary)" }}>
+            Forgot Password?
+          </Link>
+        </div>
 
         {error && <p style={{ color: "var(--danger)", fontSize: 13, marginTop: 14 }}>{error}</p>}
 

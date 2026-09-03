@@ -71,12 +71,30 @@ def test_resend_email_service_success(mocker):
     assert result is True
 
 
-def test_resend_email_service_network_failure_handled_gracefully(mocker):
+def test_apps_script_email_service_success(mocker):
+    from app.services.email_service import send_email, is_email_configured
+    from app.core.config import settings
+
+    mocker.patch.object(settings, "APPS_SCRIPT_EMAIL_URL", "https://script.google.com/macros/s/test/exec")
+    mocker.patch.object(settings, "APPS_SCRIPT_SHARED_SECRET", "my_secret_key")
+    assert is_email_configured() is True
+
+    mock_resp = mocker.Mock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"status": "success", "message": "Email sent"}
+    mocker.patch("requests.post", return_value=mock_resp)
+
+    result = send_email("student@example.com", "Subject", "Body")
+    assert result is True
+
+
+def test_apps_script_email_service_failure_handled_gracefully(mocker):
     from app.services.email_service import send_email
     from app.core.config import settings
 
-    mocker.patch.object(settings, "RESEND_API_KEY", "re_test_12345")
-    mocker.patch("requests.post", side_effect=Exception("Connection error"))
+    mocker.patch.object(settings, "APPS_SCRIPT_EMAIL_URL", "https://script.google.com/macros/s/test/exec")
+    mocker.patch.object(settings, "APPS_SCRIPT_SHARED_SECRET", "my_secret_key")
+    mocker.patch("requests.post", side_effect=Exception("Google Apps Script Timeout"))
 
     result = send_email("student@example.com", "Subject", "Body")
     assert result is False

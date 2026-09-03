@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { register, login } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
+import PasswordInput from "../../components/PasswordInput";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -55,8 +56,12 @@ export default function RegisterPage() {
           <input value={form.email} onChange={(e) => update("email", e.target.value)} type="email" style={{ width: "100%" }} />
         </div>
         <div>
-          <label style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 6 }}>Password</label>
-          <input value={form.password} onChange={(e) => update("password", e.target.value)} type="password" style={{ width: "100%" }} />
+          <PasswordInput
+            label="Password"
+            value={form.password}
+            onChange={(e) => update("password", e.target.value)}
+            placeholder="••••••••"
+          />
         </div>
         <div style={{ display: "flex", gap: 12 }}>
           <div style={{ flex: 1 }}>

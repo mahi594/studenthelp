@@ -60,8 +60,11 @@ class Settings(BaseSettings):
     LOCAL_STORAGE_DIR: str = "local_uploads"
     BACKEND_PUBLIC_URL: str = "http://localhost:8080"
 
-    # Email (Resend HTTPS API or legacy SMTP).
+    # Email (Google Apps Script HTTPS API, Resend HTTPS API, or legacy SMTP).
     # Leave empty to skip real sending in dev mode.
+    APPS_SCRIPT_EMAIL_URL: str = ""
+    APPS_SCRIPT_SHARED_SECRET: str = ""
+
     RESEND_API_KEY: str = ""
     RESEND_FROM_EMAIL: str = "StudentHelp <onboarding@resend.dev>"
 
@@ -93,7 +96,7 @@ settings = Settings()
 if settings.ENV == "production":
     if not settings.SECRET_KEY or settings.SECRET_KEY in ["change-this-to-a-random-secret", "secret", "change_me"]:
         raise RuntimeError("Production deployment requires a secure, non-default SECRET_KEY")
-    if not (settings.RESEND_API_KEY or (settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD)):
-        raise RuntimeError("Either RESEND_API_KEY or SMTP configuration must be set in production to prevent fallback credential exposure")
+    if not (settings.APPS_SCRIPT_EMAIL_URL or settings.RESEND_API_KEY or (settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD)):
+        raise RuntimeError("Either APPS_SCRIPT_EMAIL_URL, RESEND_API_KEY, or SMTP configuration must be set in production to prevent fallback credential exposure")
 
 MAX_RESUME_UPLOAD_BYTES: int = 15 * 1024 * 1024

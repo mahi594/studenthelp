@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { changePassword } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
 import { isLoggedIn } from "../../lib/api";
+import PasswordInput from "../../components/PasswordInput";
 
 export default function ChangePasswordPage() {
   const router = useRouter();
@@ -62,21 +63,24 @@ export default function ChangePasswordPage() {
           <p style={{ color: "var(--primary)", fontSize: 14 }}>Password updated. Taking you to your dashboard...</p>
         ) : (
           <>
-            <label style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 6 }}>
-              New password
-            </label>
-            <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" style={{ width: "100%" }} />
+            <div>
+              <PasswordInput
+                label="New password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+            </div>
 
-            <label style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginTop: 16, marginBottom: 6 }}>
-              Confirm password
-            </label>
-            <input
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-              type="password"
-              style={{ width: "100%" }}
-            />
+            <div style={{ marginTop: 16 }}>
+              <PasswordInput
+                label="Confirm password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                placeholder="••••••••"
+              />
+            </div>
 
             {error && <p style={{ color: "var(--danger)", fontSize: 13, marginTop: 14 }}>{error}</p>}
 

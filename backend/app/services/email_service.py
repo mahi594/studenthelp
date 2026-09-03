@@ -1,8 +1,12 @@
 """
-HTTPS-first email service (Resend API) with graceful error handling & SMTP fallback.
+HTTPS-first email service supporting Google Apps Script (Gmail MailApp over HTTPS),
+Resend API, and legacy SMTP fallback with graceful error handling.
 
-Supports sending via Resend HTTP API (https://api.resend.com/emails) over standard
-HTTPS (port 443), eliminating Render's outbound SMTP port blocking issues (ports 25, 465, 587).
+Priority:
+1. Google Apps Script Web App HTTPS API (if APPS_SCRIPT_EMAIL_URL is configured)
+2. Resend HTTPS API (if RESEND_API_KEY is configured)
+3. SMTP (if SMTP_HOST is configured)
+4. Dev Mode Fallback (returns tokens in response if no email provider is configured)
 """
 import logging
 import smtplib
@@ -15,23 +19,61 @@ logger = logging.getLogger(__name__)
 
 
 def is_email_configured() -> bool:
-    """Checks if either Resend API or SMTP is configured."""
+    """Checks if any email provider (Google Apps Script, Resend, or SMTP) is configured."""
+    has_apps_script = bool(settings.APPS_SCRIPT_EMAIL_URL)
     has_resend = bool(settings.RESEND_API_KEY)
     has_smtp = bool(settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD)
-    return has_resend or has_smtp
+    return has_apps_script or has_resend or has_smtp
 
 
 def send_email(to_email: str, subject: str, body: str) -> bool:
-    """Sends an email via Resend HTTPS API (preferred) or SMTP fallback.
+    """Sends an email via Google Apps Script (preferred), Resend, or SMTP.
 
-    Returns True if successfully sent, False if skipped or failed. Handles
-    network/API exceptions gracefully so application flows never crash.
+    Returns True if successfully sent, False if skipped or failed. Handles all
+    network/API exceptions gracefully so application flows never crash with 500.
     """
     if not is_email_configured():
         logger.info("Email sending skipped: No email provider configured.")
         return False
 
-    # 1. Preferred: Resend HTTPS API (works on Render free tier, standard HTTPS port 443)
+    # 1. Preferred: Google Apps Script Web App HTTPS API
+    if settings.APPS_SCRIPT_EMAIL_URL:
+        try:
+            payload = {
+                "secret": settings.APPS_SCRIPT_SHARED_SECRET,
+                "recipient": to_email,
+                "subject": subject,
+                "body": body,
+            }
+            # Google Apps Script web apps return a 302 redirect on success;
+            # allow_redirects=True follows it to 200 OK.
+            resp = requests.post(
+                settings.APPS_SCRIPT_EMAIL_URL,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                allow_redirects=True,
+                timeout=10,
+            )
+
+            # Check response status or JSON output
+            if resp.status_code == 200:
+                try:
+                    data = resp.json()
+                    if isinstance(data, dict) and data.get("status") == "error":
+                        logger.error("Google Apps Script returned error: %s", data.get("message"))
+                        return False
+                except Exception:
+                    pass  # Non-JSON 200 response still indicates request reached endpoint
+                logger.info("Email successfully sent via Google Apps Script to %s", to_email)
+                return True
+            else:
+                logger.error("Google Apps Script email request failed (status %s): %s", resp.status_code, resp.text)
+                return False
+        except Exception as exc:
+            logger.exception("Failed to send email via Google Apps Script HTTPS API to %s: %s", to_email, str(exc))
+            return False
+
+    # 2. Resend HTTPS API
     if settings.RESEND_API_KEY:
         try:
             url = "https://api.resend.com/emails"
@@ -51,17 +93,13 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
                 logger.info("Email successfully sent via Resend API to %s", to_email)
                 return True
             else:
-                logger.error(
-                    "Resend API email error (status %s): %s",
-                    resp.status_code,
-                    resp.text,
-                )
+                logger.error("Resend API email error (status %s): %s", resp.status_code, resp.text)
                 return False
         except Exception as exc:
             logger.exception("Failed to send email via Resend HTTPS API to %s: %s", to_email, str(exc))
             return False
 
-    # 2. Fallback: SMTP (if configured and RESEND_API_KEY is unset)
+    # 3. SMTP Fallback
     if settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD:
         try:
             msg = MIMEText(body)
