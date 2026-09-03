@@ -53,3 +53,31 @@ def test_already_verified_user_gets_friendly_message(client, registered_user):
 
     second_res = client.post("/api/v1/auth/resend-verification", headers=registered_user["headers"])
     assert "already verified" in second_res.json()["message"].lower()
+
+
+def test_resend_email_service_success(mocker):
+    from app.services.email_service import send_email, is_email_configured
+    from app.core.config import settings
+
+    mocker.patch.object(settings, "RESEND_API_KEY", "re_test_12345")
+    assert is_email_configured() is True
+
+    mock_resp = mocker.Mock()
+    mock_resp.status_code = 200
+    mock_resp.text = '{"id": "msg_123"}'
+    mocker.patch("requests.post", return_value=mock_resp)
+
+    result = send_email("student@example.com", "Subject", "Body")
+    assert result is True
+
+
+def test_resend_email_service_network_failure_handled_gracefully(mocker):
+    from app.services.email_service import send_email
+    from app.core.config import settings
+
+    mocker.patch.object(settings, "RESEND_API_KEY", "re_test_12345")
+    mocker.patch("requests.post", side_effect=Exception("Connection error"))
+
+    result = send_email("student@example.com", "Subject", "Body")
+    assert result is False
+

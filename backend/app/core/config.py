@@ -60,9 +60,11 @@ class Settings(BaseSettings):
     LOCAL_STORAGE_DIR: str = "local_uploads"
     BACKEND_PUBLIC_URL: str = "http://localhost:8080"
 
-    # Email (for password reset). Leave SMTP_HOST empty to skip real sending -
-    # /auth/forgot-password will return the reset token directly instead
-    # (dev-only fallback, see email_service.py).
+    # Email (Resend HTTPS API or legacy SMTP).
+    # Leave empty to skip real sending in dev mode.
+    RESEND_API_KEY: str = ""
+    RESEND_FROM_EMAIL: str = "StudentHelp <onboarding@resend.dev>"
+
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
@@ -91,7 +93,7 @@ settings = Settings()
 if settings.ENV == "production":
     if not settings.SECRET_KEY or settings.SECRET_KEY in ["change-this-to-a-random-secret", "secret", "change_me"]:
         raise RuntimeError("Production deployment requires a secure, non-default SECRET_KEY")
-    if not settings.SMTP_HOST:
-        raise RuntimeError("SMTP_HOST must be configured in production to prevent fallback credential exposure")
+    if not (settings.RESEND_API_KEY or (settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD)):
+        raise RuntimeError("Either RESEND_API_KEY or SMTP configuration must be set in production to prevent fallback credential exposure")
 
 MAX_RESUME_UPLOAD_BYTES: int = 15 * 1024 * 1024
